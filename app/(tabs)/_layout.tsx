@@ -1,25 +1,17 @@
-import React from 'react';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { Tabs } from 'expo-router';
-import { View, Text, StyleSheet } from 'react-native';
+import React from 'react';
+import { StyleSheet, View } from 'react-native';
 
-import Colors from '@/constants/Colors';
-import { useColorScheme } from '@/components/useColorScheme';
+import NavIcon from '@/components/NavIcon';
 import { useClientOnlyValue } from '@/components/useClientOnlyValue';
-
-// You can explore the built-in icon families and icons on the web at https://icons.expo.fyi/
-function TabBarIcon(props: {
-  name: React.ComponentProps<typeof FontAwesome>['name'];
-  color: string;
-}) {
-  return <FontAwesome size={28} style={{ marginBottom: -3 }} {...props} />;
-}
+import { useColorScheme } from '@/components/useColorScheme';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
 
   return (
     <Tabs
+      initialRouteName="index"
       screenOptions={{
         tabBarActiveTintColor: '#FFFFFF',
         tabBarInactiveTintColor: '#E0E0E0',
@@ -35,21 +27,21 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color }) => <TabBarIcon name="home" color={color} />,
+          tabBarIcon: ({ focused }) => <NavIcon name="home" focused={focused} size={24} />,
         }}
       />
       <Tabs.Screen
         name="two"
         options={{
           title: 'Schedule',
-          tabBarIcon: ({ color }) => <TabBarIcon name="calendar" color={color} />,
+          tabBarIcon: ({ focused }) => <NavIcon name="schedule" focused={focused} size={24} />,
         }}
       />
       <Tabs.Screen
         name="three"
         options={{
           title: 'Reports',
-          tabBarIcon: ({ color }) => <TabBarIcon name="file-text-o" color={color} />,
+          tabBarIcon: ({ focused }) => <NavIcon name="reports" focused={focused} size={24} />,
         }}
       />
     </Tabs>
@@ -59,14 +51,16 @@ export default function TabLayout() {
 const styles = StyleSheet.create({
   tabBar: {
     position: 'absolute',
-    left: 24,
-    right: 24,
+    left: 32,
+    right: 32,
     bottom: 24,
-    height: 68,
+    height: 72,
     borderRadius: 34,
     backgroundColor: 'transparent',
     borderTopWidth: 0,
     elevation: 0,
+    marginHorizontal: 15,
+    marginBottom: 0,
   },
   tabBarBackground: {
     flex: 1,

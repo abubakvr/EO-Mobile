@@ -1,83 +1,50 @@
-import React from 'react';
-import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Asset } from "expo-asset";
+import { File } from 'expo-file-system';
+import { LeafletView } from 'react-native-leaflet-view';
+import { useRouter } from 'expo-router';
 
-// Try to import WebView, fallback to null if not installed
-let WebView: any = null;
-try {
-  WebView = require('react-native-webview').WebView;
-} catch (e) {
-  console.log('react-native-webview not installed. Please run: npm install');
-}
+const DEFAULT_LOCATION = {
+  latitude: 9.0765,
+  longitude: 7.3986,
+};
 
 const HomeScreen = () => {
-  // Create the map HTML that will be loaded in the iframe
-  const mapIframeContent = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; overflow: hidden; }
-    #map { width: 100%; height: 100%; }
-  </style>
-</head>
-<body>
-  <div id="map"></div>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script>
-    var map = L.map('map', {
-      center: [9.0765, 7.3986],
-      zoom: 12,
-      zoomControl: true,
-      scrollWheelZoom: true,
-      doubleClickZoom: true,
-      boxZoom: true,
-      dragging: true,
-      touchZoom: true
-    });
-    
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap',
-      maxZoom: 19,
-      subdomains: ['a', 'b', 'c']
-    }).addTo(map);
-    
-    var greenIcon = L.divIcon({
-      className: 'custom-marker',
-      html: '<div style="background-color: #23864B; width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>',
-      iconSize: [20, 20],
-      iconAnchor: [10, 10]
-    });
-    
-    L.marker([9.0765, 7.3986], { icon: greenIcon }).addTo(map);
-  </script>
-</body>
-</html>
-  `;
+  const router = useRouter();
+  const [webViewContent, setWebViewContent] = useState<string | null>(null);
 
-  // Encode the map HTML as a data URI
-  const mapDataUri = `data:text/html;charset=utf-8,${encodeURIComponent(mapIframeContent)}`;
+  useEffect(() => {
+    let isMounted = true;
 
-  const mapHtml = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; overflow: hidden; }
-    iframe { width: 100%; height: 100%; border: none; }
-  </style>
-</head>
-<body>
-  <iframe id="mapFrame" src="${mapDataUri}" allow="geolocation" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
-</body>
-</html>
-  `;
+    const loadHtml = async () => {
+      try {
+        const path = require("../assets/leaflet.html");
+        const asset = Asset.fromModule(path);
+        await asset.downloadAsync();
+        
+        if (!asset.localUri) {
+          throw new Error('Asset localUri is null');
+        }
+        
+        const file = new File(asset.localUri);
+        const htmlContent = await file.text();
+
+        if (isMounted) {
+          setWebViewContent(htmlContent);
+        }
+      } catch (error) {
+        console.error('Error loading HTML:', error);
+        Alert.alert('Error loading HTML', JSON.stringify(error));
+      }
+    };
+
+    loadHtml();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   return (
     <View style={styles.root}>
@@ -105,85 +72,67 @@ const HomeScreen = () => {
             <TouchableOpacity style={styles.iconChip}>
               <Text style={styles.iconChipText}>🔔</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.primaryChip}>
+            <TouchableOpacity
+              style={styles.primaryChip}
+              onPress={() => router.push('/validate')}>
               <Text style={styles.primaryChipText}>Register a Tree</Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        <View style={styles.tasksCard}>
+        <TouchableOpacity
+          style={styles.tasksCard}
+          onPress={() => router.push('/(tabs)/two')}
+          activeOpacity={0.8}>
           <Text style={styles.tasksLabel}>Assigned Tasks</Text>
           <Text style={styles.tasksCount}>3 Tasks</Text>
-        </View>
+        </TouchableOpacity>
 
         <View style={styles.mapCard}>
-        {WebView ? (
-          <WebView
-            style={styles.mapImage}
-            source={{ html: mapHtml }}
-            javaScriptEnabled={true}
-            domStorageEnabled={true}
-            startInLoadingState={true}
-            scalesPageToFit={true}
-            scrollEnabled={true}
-            showsHorizontalScrollIndicator={false}
-            showsVerticalScrollIndicator={false}
-            bounces={false}
-            allowsInlineMediaPlayback={true}
-            mediaPlaybackRequiresUserAction={false}
-            mixedContentMode="always"
-            originWhitelist={['*']}
-            setSupportMultipleWindows={false}
-            setBuiltInZoomControls={false}
-            setDisplayZoomControls={false}
-            cacheEnabled={true}
-            incognito={false}
-            thirdPartyCookiesEnabled={true}
-            sharedCookiesEnabled={true}
-            allowFileAccess={true}
-            allowUniversalAccessFromFileURLs={true}
-            allowFileAccessFromFileURLs={true}
-            cacheEnabled={true}
-            cacheMode="LOAD_DEFAULT"
-            onError={(syntheticEvent) => {
-              const { nativeEvent } = syntheticEvent;
-              console.warn('WebView error: ', nativeEvent);
-            }}
-            onHttpError={(syntheticEvent) => {
-              const { nativeEvent } = syntheticEvent;
-              console.warn('WebView HTTP error: ', nativeEvent);
-            }}
-            onLoadEnd={() => {
-              console.log('Map loaded successfully');
-            }}
-            onMessage={(event) => {
-              console.log('WebView message: ', event.nativeEvent.data);
-            }}
-          />
-        ) : (
-          <View style={styles.mapImage}>
-            <Image
-              source={{
-                uri: 'https://images.unsplash.com/photo-1500839941678-aae14dbfae9a?auto=format&fit=crop&w=800&q=80',
-              }}
-              style={styles.mapImage}
-              resizeMode="cover"
-            />
-            <View style={styles.mapPlaceholder}>
-              <Text style={styles.mapPlaceholderText}>Install react-native-webview to see interactive map</Text>
+          {!webViewContent ? (
+            <View style={[styles.mapImage, styles.loadingContainer]}>
+              <ActivityIndicator size="large" color="#2E8B57" />
             </View>
-          </View>
-        )}
+          ) : (
+            <View style={styles.mapImage}>
+              <LeafletView
+                source={{ html: webViewContent }}
+                mapCenterPosition={{
+                  lat: DEFAULT_LOCATION.latitude,
+                  lng: DEFAULT_LOCATION.longitude,
+                }}
+                zoom={13}
+                mapMarkers={[
+                  {
+                    id: '1',
+                    position: {
+                      lat: DEFAULT_LOCATION.latitude,
+                      lng: DEFAULT_LOCATION.longitude,
+                    },
+                    icon: '📍',
+                    size: [32, 32],
+                  },
+                ]}
+                zoomControl={true}
+                attributionControl={true}
+                style={{ flex: 1, width: '100%', height: '100%' }}
+                doDebug={false}
+                onError={(error) => {
+                  Alert.alert('Map Error', JSON.stringify(error));
+                }}
+              />
+            </View>
+          )}
 
-        <View style={styles.mapActions}>
-          <TouchableOpacity style={styles.roundIconButton}>
-            <Text style={styles.roundIconText}>🔍</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.roundIconButton}>
-            <Text style={styles.roundIconText}>📍</Text>
-          </TouchableOpacity>
+          <View style={styles.mapActions}>
+            <TouchableOpacity style={styles.roundIconButton}>
+              <Text style={styles.roundIconText}>🔍</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.roundIconButton}>
+              <Text style={styles.roundIconText}>📍</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
       </ScrollView>
     </View>
   );
@@ -252,7 +201,7 @@ const styles = StyleSheet.create({
   },
   primaryChip: {
     borderRadius: 18,
-    backgroundColor: '#23864B',
+    backgroundColor: '#2E8B57',
     paddingHorizontal: 16,
     paddingVertical: 8,
   },
@@ -262,7 +211,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   tasksCard: {
-    backgroundColor: '#23864B',
+    backgroundColor: '#2E8B57',
     borderRadius: 16,
     paddingHorizontal: 20,
     paddingVertical: 18,
@@ -286,23 +235,11 @@ const styles = StyleSheet.create({
   mapImage: {
     width: '100%',
     height: 360,
-    backgroundColor: '#E0E0E0',
   },
-  mapPlaceholder: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+  loadingContainer: {
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.1)',
-  },
-  mapPlaceholderText: {
-    color: '#666666',
-    fontSize: 12,
-    textAlign: 'center',
-    padding: 20,
+    backgroundColor: '#F0F0F0',
   },
   mapActions: {
     position: 'absolute',

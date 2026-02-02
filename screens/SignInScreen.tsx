@@ -1,6 +1,7 @@
 import React from 'react';
 import { useRouter } from 'expo-router';
 import {
+  Alert,
   ImageBackground,
   KeyboardAvoidingView,
   Platform,
@@ -27,7 +28,14 @@ const SignInScreen = () => {
         bounces={false}
         showsVerticalScrollIndicator={false}>
         <View style={styles.container}>
-          <ImageBackground source={{ uri: HEADER_IMAGE }} style={styles.headerImage}>
+          <ImageBackground 
+            source={{ 
+              uri: HEADER_IMAGE,
+              cache: 'force-cache'
+            }} 
+            style={styles.headerImage}
+            resizeMode="cover"
+            imageStyle={{ resizeMode: 'cover' }}>
             <View style={styles.headerOverlay} />
             <View style={styles.logoContainer}>
               <View style={styles.logoMark} />
@@ -60,7 +68,23 @@ const SignInScreen = () => {
             <TouchableOpacity
               style={styles.primaryButton}
               activeOpacity={0.9}
-              onPress={() => router.replace('/(tabs)')}>
+              onPress={async () => {
+                console.log('Navigating to tabs...');
+                try {
+                  // Try navigating to the tabs route
+                  await router.replace('/(tabs)');
+                  console.log('Navigation successful');
+                } catch (error) {
+                  console.error('Navigation failed:', error);
+                  // Try alternative route
+                  try {
+                    await router.push('/(tabs)/index');
+                  } catch (e) {
+                    console.error('Alternative navigation also failed:', e);
+                    Alert.alert('Navigation Error', 'Could not navigate to home screen. Please try again.');
+                  }
+                }
+              }}>
               <Text style={styles.primaryButtonText}>Sign In</Text>
             </TouchableOpacity>
 
@@ -151,7 +175,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: '700',
-    color: '#23864B',
+    color: '#2E8B57',
     marginBottom: 24,
   },
   inputGroup: {
@@ -171,7 +195,7 @@ const styles = StyleSheet.create({
   primaryButton: {
     height: 54,
     borderRadius: 999,
-    backgroundColor: '#23864B',
+    backgroundColor: '#2E8B57',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 24,
@@ -218,7 +242,7 @@ const styles = StyleSheet.create({
   },
   footerLinkText: {
     fontWeight: '600',
-    color: '#23864B',
+    color: '#2E8B57',
   },
 });
 

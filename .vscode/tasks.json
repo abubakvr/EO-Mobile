@@ -1,0 +1,32 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Start Android Emulator (Pixel_7_Pro)",
+      "type": "shell",
+      "command": "${env:HOME}/Library/Android/sdk/emulator/emulator",
+      "args": ["-avd", "Pixel_7_Pro"],
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    {
+      "label": "Start Android Emulator (Pixel_3a)",
+      "type": "shell",
+      "command": "${env:HOME}/Library/Android/sdk/emulator/emulator",
+      "args": ["-avd", "Pixel_3a_API_33_arm64-v8a"],
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    }
+  ]
+}
+
+
+

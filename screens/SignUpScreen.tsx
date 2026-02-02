@@ -1,15 +1,15 @@
-import React from 'react';
 import { useRouter } from 'expo-router';
+import React from 'react';
 import {
-  ImageBackground,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ImageBackground,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 
 const HEADER_IMAGE =
@@ -27,7 +27,14 @@ const SignUpScreen = () => {
         bounces={false}
         showsVerticalScrollIndicator={false}>
         <View style={styles.container}>
-          <ImageBackground source={{ uri: HEADER_IMAGE }} style={styles.headerImage}>
+          <ImageBackground 
+            source={{ 
+              uri: HEADER_IMAGE,
+              cache: 'force-cache'
+            }} 
+            style={styles.headerImage}
+            resizeMode="cover"
+            imageStyle={{ resizeMode: 'cover' }}>
             <View style={styles.headerOverlay} />
             <View style={styles.logoContainer}>
               <View style={styles.logoMark} />
@@ -186,7 +193,7 @@ const styles = StyleSheet.create({
   primaryButton: {
     height: 54,
     borderRadius: 999,
-    backgroundColor: '#23864B',
+    backgroundColor: '#2E8B57',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
@@ -252,7 +259,7 @@ const styles = StyleSheet.create({
   },
   footerLinkText: {
     fontWeight: '600',
-    color: '#23864B',
+    color: '#2E8B57',
   },
 });
 
