@@ -1,20 +1,19 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useTasks } from '@/hooks/useTasks';
+import type { Task } from '@/types/task';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
+  RefreshControl,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
-  StatusBar,
-  Platform,
-  ActivityIndicator,
-  RefreshControl,
+  View
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { useTasks } from '@/hooks/useTasks';
-import type { Task } from '@/types/task';
 
 const DEFAULT_PAGE_SIZE = 10;
 

@@ -5,13 +5,12 @@ import React from 'react';
 import {
     ActivityIndicator,
     Image,
-    Platform,
     ScrollView,
     StatusBar,
     StyleSheet,
     Text,
     TouchableOpacity,
-    View,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 

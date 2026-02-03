@@ -4,10 +4,8 @@ import { StyleSheet, View } from 'react-native';
 
 import NavIcon from '@/components/NavIcon';
 import { useClientOnlyValue } from '@/components/useClientOnlyValue';
-import { useColorScheme } from '@/components/useColorScheme';
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
 
   return (
     <Tabs
