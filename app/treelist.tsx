@@ -8,91 +8,46 @@ import {
   StatusBar,
   Platform,
   Image,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useSpeciesList } from '@/hooks/useSpecies';
 
-// Tree species data matching the design - using random Unsplash tree images
-const treeSpecies = [
-  {
-    id: 1,
-    name: 'Moringa',
-    image: 'https://source.unsplash.com/400x400/?moringa,tree',
-  },
-  {
-    id: 2,
-    name: 'Eucalyptus',
-    image: 'https://source.unsplash.com/400x400/?eucalyptus,tree',
-  },
-  {
-    id: 3,
-    name: 'Lemon',
-    image: 'https://source.unsplash.com/400x400/?lemon,tree',
-  },
-  {
-    id: 4,
-    name: 'Locust Beans',
-    image: 'https://source.unsplash.com/400x400/?tree,forest',
-  },
-  {
-    id: 5,
-    name: 'Sandal',
-    image: 'https://source.unsplash.com/400x400/?tree,nature',
-  },
-  {
-    id: 6,
-    name: 'Sesbania',
-    image: 'https://source.unsplash.com/400x400/?tree,green',
-  },
-  {
-    id: 7,
-    name: 'Tamarin',
-    image: 'https://source.unsplash.com/400x400/?tamarind,tree',
-  },
-  {
-    id: 8,
-    name: 'Black Plum',
-    image: 'https://source.unsplash.com/400x400/?plum,tree',
-  },
-  {
-    id: 9,
-    name: 'Dates',
-    image: 'https://source.unsplash.com/400x400/?date,palm,tree',
-  },
-  {
-    id: 10,
-    name: 'Ficus Polita',
-    image: 'https://source.unsplash.com/400x400/?ficus,tree',
-  },
-  {
-    id: 11,
-    name: 'Neem',
-    image: 'https://source.unsplash.com/400x400/?neem,tree',
-  },
-  {
-    id: 12,
-    name: 'Orange',
-    image: 'https://source.unsplash.com/400x400/?orange,tree',
-  },
-];
+// Helper function to get image URL for a species
+const getSpeciesImageUrl = (speciesName: string): string => {
+  const name = speciesName.toLowerCase().replace(/\s+/g, ',');
+  return `https://source.unsplash.com/400x400/?${name},tree`;
+};
 
 export default function TreeListScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
+  const { species, isLoading, error, refetch } = useSpeciesList();
+  
+  // Helper to get string param value
+  const getStringParam = (param: string | string[] | undefined, defaultValue: string = ''): string => {
+    if (Array.isArray(param)) return param[0] || defaultValue;
+    return param || defaultValue;
+  };
+  
+  // Get preserved task data from params
+  const preservedParams = {
+    taskId: getStringParam(params.taskId),
+    treeId: getStringParam(params.treeId),
+    treeCode: getStringParam(params.treeCode),
+    speciesName: getStringParam(params.speciesName),
+    speciesId: getStringParam(params.speciesId),
+    custodianName: getStringParam(params.custodianName),
+    custodianPhone: getStringParam(params.custodianPhone),
+    custodianId: getStringParam(params.custodianId),
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle="dark-content" backgroundColor="#F5F5F5" />
-
-      {/* Status Bar */}
-      <View style={styles.statusBar}>
-        <Text style={styles.statusTime}>9:41</Text>
-        <View style={styles.statusIcons}>
-          <Ionicons name="cellular" size={18} color="#000" />
-          <Ionicons name="wifi" size={18} color="#000" style={styles.statusIcon} />
-          <Ionicons name="battery-full" size={18} color="#000" style={styles.statusIcon} />
-        </View>
-      </View>
 
       {/* Header */}
       <View style={styles.header}>
@@ -121,29 +76,61 @@ export default function TreeListScreen() {
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}>
-        <View style={styles.grid}>
-          {treeSpecies.map((tree) => (
-            <TouchableOpacity
-              key={tree.id}
-              style={styles.treeCard}
-              onPress={() => {
-                router.push({
-                  pathname: '/treespecie',
-                  params: {
-                    specieId: tree.id.toString(),
-                    specieName: tree.name,
-                  },
-                });
-              }}
-              activeOpacity={0.8}>
-              <View style={styles.imageContainer}>
-                <Image source={{ uri: tree.image }} style={styles.treeImage} resizeMode="cover" />
-              </View>
-              <Text style={styles.treeName}>{tree.name}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isLoading && species.length > 0}
+            onRefresh={refetch}
+          />
+        }>
+        {isLoading && species.length === 0 ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#2E8B57" />
+            <Text style={styles.loadingText}>Loading species...</Text>
+          </View>
+        ) : error ? (
+          <View style={styles.errorContainer}>
+            <Ionicons name="alert-circle-outline" size={48} color="#FF3B30" />
+            <Text style={styles.errorText}>Failed to load species</Text>
+            <Text style={styles.errorSubtext}>{error.message}</Text>
+          </View>
+        ) : species.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="leaf-outline" size={48} color="#999" />
+            <Text style={styles.emptyText}>No species available</Text>
+          </View>
+        ) : (
+          <View style={styles.grid}>
+            {species.map((specie) => (
+              <TouchableOpacity
+                key={specie.id}
+                style={styles.treeCard}
+                onPress={() => {
+                  router.push({
+                    pathname: '/treespecie',
+                    params: {
+                      specieId: specie.id.toString(),
+                      specieName: specie.common_name,
+                      scientificName: specie.scientific_name,
+                      specieCode: specie.code,
+                      // Preserve task data
+                      ...preservedParams,
+                    },
+                  });
+                }}
+                activeOpacity={0.8}>
+                <View style={styles.imageContainer}>
+                  <Image
+                    source={{ uri: getSpeciesImageUrl(specie.common_name) }}
+                    style={styles.treeImage}
+                    resizeMode="cover"
+                  />
+                </View>
+                <Text style={styles.treeName}>{specie.common_name}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -153,27 +140,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F5F5F5',
-  },
-  statusBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 0 : 8,
-    paddingBottom: 8,
-    backgroundColor: '#F5F5F5',
-  },
-  statusTime: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#000',
-  },
-  statusIcons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  statusIcon: {
-    marginLeft: 6,
   },
   header: {
     flexDirection: 'row',
@@ -254,6 +220,49 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: '#000',
+    textAlign: 'center',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#666',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 20,
+  },
+  errorText: {
+    marginTop: 16,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FF3B30',
+    textAlign: 'center',
+  },
+  errorSubtext: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  emptyText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#999',
     textAlign: 'center',
   },
 });

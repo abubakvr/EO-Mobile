@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'expo-router';
 import {
   Alert,
@@ -11,13 +11,20 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  ActivityIndicator,
 } from 'react-native';
+import { useAuth } from '@/hooks/useAuth';
+import { ApiError } from '@/services/apiClient';
 
 const HEADER_IMAGE =
   'https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=800&q=80';
 
 const SignInScreen = () => {
   const router = useRouter();
+  const { login, isLoggingIn, loginError } = useAuth();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [localError, setLocalError] = useState<string | null>(null);
 
   return (
     <KeyboardAvoidingView
@@ -55,37 +62,73 @@ const SignInScreen = () => {
                 placeholderTextColor="#A0A0A0"
                 keyboardType="email-address"
                 autoCapitalize="none"
-                style={styles.input}
+                autoCorrect={false}
+                value={email}
+                onChangeText={(text) => {
+                  setEmail(text);
+                  setLocalError(null);
+                }}
+                style={[styles.input, localError && styles.inputError]}
+                editable={!isLoggingIn}
               />
               <TextInput
                 placeholder="Password"
                 placeholderTextColor="#A0A0A0"
                 secureTextEntry
-                style={styles.input}
+                value={password}
+                onChangeText={(text) => {
+                  setPassword(text);
+                  setLocalError(null);
+                }}
+                style={[styles.input, localError && styles.inputError]}
+                editable={!isLoggingIn}
               />
+              {(localError || loginError) && (
+                <View style={styles.errorContainer}>
+                  <Text style={styles.errorText}>
+                    {localError || (loginError instanceof ApiError ? loginError.message : 'An error occurred')}
+                  </Text>
+                </View>
+              )}
             </View>
 
             <TouchableOpacity
-              style={styles.primaryButton}
+              style={[styles.primaryButton, isLoggingIn && styles.primaryButtonDisabled]}
               activeOpacity={0.9}
-              onPress={async () => {
-                console.log('Navigating to tabs...');
-                try {
-                  // Try navigating to the tabs route
-                  await router.replace('/(tabs)');
-                  console.log('Navigation successful');
-                } catch (error) {
-                  console.error('Navigation failed:', error);
-                  // Try alternative route
-                  try {
-                    await router.push('/(tabs)/index');
-                  } catch (e) {
-                    console.error('Alternative navigation also failed:', e);
-                    Alert.alert('Navigation Error', 'Could not navigate to home screen. Please try again.');
-                  }
+              disabled={isLoggingIn}
+              onPress={() => {
+                // Clear previous errors
+                setLocalError(null);
+
+                // Validate inputs
+                if (!email.trim()) {
+                  setLocalError('Please enter your email address');
+                  return;
                 }
+
+                if (!email.includes('@')) {
+                  setLocalError('Please enter a valid email address');
+                  return;
+                }
+
+                if (!password.trim()) {
+                  setLocalError('Please enter your password');
+                  return;
+                }
+
+                if (password.length < 6) {
+                  setLocalError('Password must be at least 6 characters');
+                  return;
+                }
+
+                // Attempt login
+                login({ email: email.trim(), password });
               }}>
+              {isLoggingIn ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
               <Text style={styles.primaryButtonText}>Sign In</Text>
+              )}
             </TouchableOpacity>
 
             <View style={styles.rowBetween}>
@@ -200,10 +243,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 24,
   },
+  primaryButtonDisabled: {
+    opacity: 0.7,
+  },
   primaryButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  inputError: {
+    borderColor: '#FF3B30',
+  },
+  errorContainer: {
+    marginTop: 8,
+    paddingHorizontal: 4,
+  },
+  errorText: {
+    color: '#FF3B30',
+    fontSize: 12,
   },
   rowBetween: {
     flexDirection: 'row',

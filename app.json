@@ -45,7 +45,15 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "This app needs access to your location to validate tree locations.",
+          "locationAlwaysPermission": "This app needs access to your location to validate tree locations.",
+          "locationWhenInUsePermission": "This app needs access to your location to validate tree locations."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

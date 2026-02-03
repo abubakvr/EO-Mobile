@@ -80,6 +80,24 @@ const treeSpeciesData = [
 export default function TreeSpecieScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  
+  // Helper to get string param value
+  const getStringParam = (param: string | string[] | undefined, defaultValue: string = ''): string => {
+    if (Array.isArray(param)) return param[0] || defaultValue;
+    return param || defaultValue;
+  };
+  
+  // Get preserved task data from params
+  const preservedParams = {
+    taskId: getStringParam(params.taskId),
+    treeId: getStringParam(params.treeId),
+    treeCode: getStringParam(params.treeCode),
+    speciesName: getStringParam(params.speciesName),
+    speciesId: getStringParam(params.speciesId),
+    custodianName: getStringParam(params.custodianName),
+    custodianPhone: getStringParam(params.custodianPhone),
+    custodianId: getStringParam(params.custodianId),
+  };
 
   // Get initial specie ID from params, default to 1
   const getInitialSpecieId = (): number => {
@@ -108,11 +126,13 @@ export default function TreeSpecieScreen() {
   };
 
   const handleSelectSpecie = () => {
-    // Navigate back to validate page with selected specie
+    // Navigate back to validate page with selected specie and preserved task data
     router.push({
       pathname: '/validate',
       params: {
         selectedSpecie: currentSpecie.name,
+        // Preserve all task data
+        ...preservedParams,
       },
     });
   };
@@ -120,16 +140,6 @@ export default function TreeSpecieScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle="dark-content" backgroundColor="#F5F5F5" />
-
-      {/* Status Bar */}
-      <View style={styles.statusBar}>
-        <Text style={styles.statusTime}>9:41</Text>
-        <View style={styles.statusIcons}>
-          <Ionicons name="cellular" size={18} color="#000" />
-          <Ionicons name="wifi" size={18} color="#000" style={styles.statusIcon} />
-          <Ionicons name="battery-full" size={18} color="#000" style={styles.statusIcon} />
-        </View>
-      </View>
 
       {/* Header */}
       <View style={styles.header}>
@@ -187,27 +197,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F5F5F5',
-  },
-  statusBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 0 : 8,
-    paddingBottom: 8,
-    backgroundColor: '#F5F5F5',
-  },
-  statusTime: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#000',
-  },
-  statusIcons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  statusIcon: {
-    marginLeft: 6,
   },
   header: {
     flexDirection: 'row',

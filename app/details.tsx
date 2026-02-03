@@ -1,7 +1,9 @@
+import { useReport } from '@/hooks/useReports';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React from 'react';
 import {
+    ActivityIndicator,
     Image,
     Platform,
     ScrollView,
@@ -13,53 +15,54 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-// Default data - will be overridden by route params if provided
-const defaultTreeData = {
-  treeImage: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=800',
-  treeId: '123-454-TY-1234',
-  specieName: 'Coconut Tree',
-  location: '3.5423, 43453',
-  accessibility: 'No',
-  reason: 'An active forest fire creates an extremely dangerous and non-permissible zone of inaccessibility.',
-  custodianName: 'Mallam Abubakar Uni',
-  custodianPhone: '+234 913 123 1242',
+// Helper to format coordinates
+const formatCoordinates = (coords: { latitude: number; longitude: number } | [number, number] | undefined): string => {
+  if (!coords) return '';
+  // Handle array format [latitude, longitude]
+  if (Array.isArray(coords) && coords.length >= 2) {
+    return `${coords[0].toFixed(4)}, ${coords[1].toFixed(4)}`;
+  }
+  // Handle object format {latitude, longitude}
+  if (typeof coords === 'object' && 'latitude' in coords && 'longitude' in coords) {
+    return `${coords.latitude.toFixed(4)}, ${coords.longitude.toFixed(4)}`;
+  }
+  return '';
+};
+
+// Helper to format date
+const formatDate = (dateString: string | undefined): string => {
+  if (!dateString) return '';
+  try {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  } catch {
+    return dateString;
+  }
 };
 
 export default function TreeDetailsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   
-  // Use route params if available, otherwise use default data
   // Helper to ensure string values (route params can be arrays)
-  const getStringParam = (param: string | string[] | undefined, defaultValue: string): string => {
-    if (Array.isArray(param)) return param[0] || defaultValue;
-    return param || defaultValue;
+  const getStringParam = (param: string | string[] | undefined, defaultValue?: string): string => {
+    if (Array.isArray(param)) return param[0] || defaultValue || '';
+    return param || defaultValue || '';
   };
 
-  const treeData = {
-    treeImage: getStringParam(params.treeImage, defaultTreeData.treeImage),
-    treeId: getStringParam(params.treeId, defaultTreeData.treeId),
-    specieName: getStringParam(params.specieName || params.treeName, defaultTreeData.specieName),
-    location: getStringParam(params.location || params.coordinates, defaultTreeData.location),
-    accessibility: getStringParam(params.accessibility, defaultTreeData.accessibility),
-    reason: getStringParam(params.reason, defaultTreeData.reason),
-    custodianName: getStringParam(params.custodianName, defaultTreeData.custodianName),
-    custodianPhone: getStringParam(params.custodianPhone, defaultTreeData.custodianPhone),
-  };
+  const reportId = getStringParam(params.reportId);
+  const { data: report, isLoading, error } = useReport(reportId ? parseInt(reportId) : undefined);
+
+  // Get first image from report_image_urls or use default
+  const treeImage = report?.report_image_urls?.[0] || 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=800';
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle="dark-content" backgroundColor="#F5F5F5" />
-
-      {/* Status Bar */}
-      <View style={styles.statusBar}>
-        <Text style={styles.statusTime}>9:41</Text>
-        <View style={styles.statusIcons}>
-          <Ionicons name="cellular" size={18} color="#000" />
-          <Ionicons name="wifi" size={18} color="#000" style={styles.statusIcon} />
-          <Ionicons name="battery-full" size={18} color="#000" style={styles.statusIcon} />
-        </View>
-      </View>
 
       {/* Header */}
       <View style={styles.header}>
@@ -83,51 +86,199 @@ export default function TreeDetailsScreen() {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}>
-        {/* Tree Image */}
-        <View style={styles.treeImageContainer}>
-          <Image
-            source={{ uri: treeData.treeImage }}
-            style={styles.treeImage}
-            resizeMode="cover"
-          />
-        </View>
+        {isLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#2E8B57" />
+            <Text style={styles.loadingText}>Loading report...</Text>
+          </View>
+        ) : error ? (
+          <View style={styles.errorContainer}>
+            <Ionicons name="alert-circle-outline" size={48} color="#FF3B30" />
+            <Text style={styles.errorText}>Failed to load report</Text>
+            <TouchableOpacity style={styles.retryButton} onPress={() => router.back()}>
+              <Text style={styles.retryButtonText}>Go Back</Text>
+            </TouchableOpacity>
+          </View>
+        ) : report ? (
+          <>
+            {/* Tree Image */}
+            {treeImage && (
+              <View style={styles.treeImageContainer}>
+                <Image
+                  source={{ uri: treeImage }}
+                  style={styles.treeImage}
+                  resizeMode="cover"
+                />
+              </View>
+            )}
 
-        {/* Tree Information Section */}
-        <View style={styles.section}>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Tree ID</Text>
-            <Text style={styles.infoValue}>{treeData.treeId}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Specie Name</Text>
-            <Text style={styles.infoValue}>{treeData.specieName}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Location</Text>
-            <Text style={styles.infoValue}>{treeData.location}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Accessibility?</Text>
-            <Text style={styles.infoValue}>{treeData.accessibility}</Text>
-          </View>
-          <View style={styles.reasonRow}>
-            <Text style={styles.infoLabel}>Reason</Text>
-            <Text style={styles.reasonText}>{treeData.reason}</Text>
-          </View>
-        </View>
+            {/* Report Information Section */}
+            <View style={styles.section}>
+              {report.id && (
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Report ID</Text>
+                  <Text style={styles.infoValue}>#{report.id}</Text>
+                </View>
+              )}
+              {report.report_type && (
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Report Type</Text>
+                  <Text style={styles.infoValue}>{report.report_type}</Text>
+                </View>
+              )}
+              {report.status && (
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Status</Text>
+                  <Text style={styles.infoValue}>{report.status}</Text>
+                </View>
+              )}
+              {(report.species_name || report.tree?.species_name) && (
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Species Name</Text>
+                  <Text style={styles.infoValue}>{report.species_name || report.tree?.species_name}</Text>
+                </View>
+              )}
+              {report.tree?.tree_code && (
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Tree Code</Text>
+                  <Text style={styles.infoValue}>{report.tree.tree_code}</Text>
+                </View>
+              )}
+              {report.ward_name && (
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Ward</Text>
+                  <Text style={styles.infoValue}>{report.ward_name}</Text>
+                </View>
+              )}
+              {report.coordinates && (
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Location</Text>
+                  <Text style={styles.infoValue}>{formatCoordinates(report.coordinates)}</Text>
+                </View>
+              )}
+              {report.location_accuracy && (
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Location Accuracy</Text>
+                  <Text style={styles.infoValue}>{report.location_accuracy.toFixed(2)}m</Text>
+                </View>
+              )}
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Accessibility</Text>
+                <Text style={styles.infoValue}>{report.is_accessible ? 'Yes' : 'No'}</Text>
+              </View>
+              {report.accessibility_reason && (
+                <View style={styles.reasonRow}>
+                  <Text style={styles.infoLabel}>Accessibility Reason</Text>
+                  <Text style={styles.reasonText}>{report.accessibility_reason}</Text>
+                </View>
+              )}
+              {report.damaged_destroyed && (
+                <View style={styles.reasonRow}>
+                  <Text style={styles.infoLabel}>Damaged/Destroyed</Text>
+                  <Text style={styles.reasonText}>{report.damaged_destroyed}</Text>
+                </View>
+              )}
+              {report.missing_tree && (
+                <View style={styles.reasonRow}>
+                  <Text style={styles.infoLabel}>Missing Tree</Text>
+                  <Text style={styles.reasonText}>{report.missing_tree}</Text>
+                </View>
+              )}
+              {report.others && (
+                <View style={styles.reasonRow}>
+                  <Text style={styles.infoLabel}>Other Information</Text>
+                  <Text style={styles.reasonText}>{report.others}</Text>
+                </View>
+              )}
+              {report.created_at && (
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Created At</Text>
+                  <Text style={styles.infoValue}>{formatDate(report.created_at)}</Text>
+                </View>
+              )}
+            </View>
 
-        {/* Custodian Information Section */}
-        <View style={[styles.section, styles.custodianSection]}>
-          <Text style={styles.custodianTitle}>Custodian Information</Text>
-          <View style={styles.custodianRow}>
-            <Ionicons name="person" size={20} color="#000" />
-            <Text style={styles.custodianText}>{treeData.custodianName}</Text>
-          </View>
-          <View style={styles.custodianRow}>
-            <Ionicons name="call" size={20} color="#000" />
-            <Text style={styles.custodianText}>{treeData.custodianPhone}</Text>
-          </View>
-        </View>
+            {/* Tree Information Section */}
+            {report.tree && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Tree Information</Text>
+                {report.tree.id && (
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Tree ID</Text>
+                    <Text style={styles.infoValue}>{report.tree.id}</Text>
+                  </View>
+                )}
+                {report.tree.tree_code && (
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Tree Code</Text>
+                    <Text style={styles.infoValue}>{report.tree.tree_code}</Text>
+                  </View>
+                )}
+                {report.tree.species_name && (
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Species</Text>
+                    <Text style={styles.infoValue}>{report.tree.species_name}</Text>
+                  </View>
+                )}
+                {report.tree.growth_stage && (
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Growth Stage</Text>
+                    <Text style={styles.infoValue}>{report.tree.growth_stage}</Text>
+                  </View>
+                )}
+                {report.tree.health_status && (
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Health Status</Text>
+                    <Text style={styles.infoValue}>{report.tree.health_status}</Text>
+                  </View>
+                )}
+                {report.tree.land_type && (
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Land Type</Text>
+                    <Text style={styles.infoValue}>{report.tree.land_type}</Text>
+                  </View>
+                )}
+                {report.tree.date_planted && (
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Date Planted</Text>
+                    <Text style={styles.infoValue}>{formatDate(report.tree.date_planted)}</Text>
+                  </View>
+                )}
+                {report.tree.last_inspected_at && (
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Last Inspected</Text>
+                    <Text style={styles.infoValue}>{formatDate(report.tree.last_inspected_at)}</Text>
+                  </View>
+                )}
+              </View>
+            )}
+
+            {/* Custodian Information Section */}
+            {report.tree?.custodian && (
+              <View style={[styles.section, styles.custodianSection]}>
+                <Text style={styles.custodianTitle}>Custodian Information</Text>
+                {report.tree.custodian.full_name && (
+                  <View style={styles.custodianRow}>
+                    <Ionicons name="person" size={20} color="#000" />
+                    <Text style={styles.custodianText}>{report.tree.custodian.full_name}</Text>
+                  </View>
+                )}
+                {report.tree.custodian.phone && (
+                  <View style={styles.custodianRow}>
+                    <Ionicons name="call" size={20} color="#000" />
+                    <Text style={styles.custodianText}>{report.tree.custodian.phone}</Text>
+                  </View>
+                )}
+                {report.tree.custodian.email && (
+                  <View style={styles.custodianRow}>
+                    <Ionicons name="mail" size={20} color="#000" />
+                    <Text style={styles.custodianText}>{report.tree.custodian.email}</Text>
+                  </View>
+                )}
+              </View>
+            )}
+          </>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -137,27 +288,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F5F5F5',
-  },
-  statusBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 0 : 8,
-    paddingBottom: 8,
-    backgroundColor: '#F5F5F5',
-  },
-  statusTime: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#000',
-  },
-  statusIcons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  statusIcon: {
-    marginLeft: 6,
   },
   header: {
     flexDirection: 'row',
@@ -273,6 +403,40 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: '#000',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#666',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  errorText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#FF3B30',
+    marginBottom: 20,
+  },
+  retryButton: {
+    backgroundColor: '#2E8B57',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 

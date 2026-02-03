@@ -1,59 +1,80 @@
-import React from 'react';
+import { useReports } from '@/hooks/useReports';
+import type { Report } from '@/types/report';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
-  StatusBar,
-  Platform,
+  View
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
 
-// Sample reports data matching the design
-const reports = [
-  {
-    id: '123-454-YT-1234',
-    name: 'Mango Tree',
-    coordinates: '3.5423, 43453',
-    type: 'normal', // normal, dark, incident
-  },
-  {
-    id: '123-454-YT-1235',
-    name: 'Mango Tree',
-    coordinates: '3.5423, 43453',
-    type: 'dark', // dark green variant
-  },
-  {
-    id: '123-454-YT-1236',
-    name: 'Mango Tree',
-    coordinates: '3.5423, 43453',
-    type: 'normal',
-  },
-  {
-    id: '123-454-YT-1237',
-    name: 'Mango Tree',
-    coordinates: '3.5423, 43453',
-    type: 'normal',
-  },
-  {
-    id: '123-454-YT-1238',
-    name: 'Mango Tree',
-    coordinates: '3.5423, 43453',
-    type: 'normal',
-  },
-  {
-    id: '123-454-YT-1239',
-    name: 'Mango Tree',
-    coordinates: '3.5423, 43453',
-    type: 'incident', // red incident card
-  },
-];
+const DEFAULT_PAGE_SIZE = 10;
 
 export default function ReportsScreen() {
   const router = useRouter();
+  const scrollViewRef = useRef<ScrollView>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const { data, isLoading, error, refetch, isRefetching } = useReports({
+    page: currentPage,
+    page_size: DEFAULT_PAGE_SIZE,
+  });
+
+  // Scroll to top when page changes
+  useEffect(() => {
+    if (scrollViewRef.current && !isLoading) {
+      scrollViewRef.current.scrollTo({ y: 0, animated: true });
+    }
+  }, [currentPage, isLoading]);
+
+  // Calculate page count from total and page_size if page_count is not provided
+  const pageCount = data?.page_count || (data?.total && data?.page_size 
+    ? Math.ceil(data.total / data.page_size) 
+    : 1);
+  const totalReports = data?.total || 0;
+  const currentPageNum = data?.page || currentPage;
+
+  // Map report_type to card type
+  const getCardType = (reportType: string, status: string): 'normal' | 'dark' | 'incident' => {
+    const lowerType = reportType.toLowerCase();
+    const lowerStatus = status.toLowerCase();
+    
+    // Check for incident indicators
+    if (lowerType.includes('incident') || 
+        lowerStatus.includes('incident') || 
+        lowerStatus.includes('urgent') ||
+        lowerStatus.includes('critical')) {
+      return 'incident';
+    }
+    
+    // Check for dark variant (could be based on status or type)
+    if (lowerStatus.includes('completed') || lowerStatus.includes('resolved')) {
+      return 'dark';
+    }
+    
+    return 'normal';
+  };
+
+  // Format coordinates for display
+  const formatCoordinates = (coords: { latitude: number; longitude: number } | [number, number] | undefined): string => {
+    if (!coords) return '';
+    // Handle array format [latitude, longitude]
+    if (Array.isArray(coords) && coords.length >= 2) {
+      return `${coords[0].toFixed(4)}, ${coords[1].toFixed(4)}`;
+    }
+    // Handle object format {latitude, longitude}
+    if (typeof coords === 'object' && 'latitude' in coords && 'longitude' in coords) {
+      return `${coords.latitude.toFixed(4)}, ${coords.longitude.toFixed(4)}`;
+    }
+    return '';
+  };
+
+  const reports = data?.data || [];
 
   const getCardStyle = (type: string) => {
     switch (type) {
@@ -89,17 +110,6 @@ export default function ReportsScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F5F5F5" />
-
-      {/* Status Bar */}
-      <View style={styles.statusBar}>
-        <Text style={styles.statusTime}>9:41</Text>
-        <View style={styles.statusIcons}>
-          <Ionicons name="cellular" size={18} color="#000" />
-          <Ionicons name="wifi" size={18} color="#000" style={styles.statusIcon} />
-          <Ionicons name="battery-full" size={18} color="#000" style={styles.statusIcon} />
-        </View>
-      </View>
 
       {/* Header */}
       <View style={styles.header}>
@@ -119,46 +129,192 @@ export default function ReportsScreen() {
 
       {/* Reports List */}
       <ScrollView
+        ref={scrollViewRef}
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}>
-        {reports.map((report, index) => (
-          <View key={index} style={[styles.reportCard, getCardStyle(report.type)]}>
-            <View style={styles.reportCardContent}>
-              <Text style={[styles.reportId, getTextStyle(report.type)]}>{report.id}</Text>
-              <Text style={[styles.reportName, getTextStyle(report.type)]}>{report.name}</Text>
-              {report.type === 'incident' && (
-                <Text style={styles.incidentLabel}>Report Incident</Text>
-              )}
-              <View style={styles.locationRow}>
-                <Ionicons
-                  name="location"
-                  size={16}
-                  color={report.type === 'dark' || report.type === 'incident' ? '#FFFFFF' : '#666'}
-                />
-                <Text style={[styles.coordinates, getTextStyle(report.type)]}>
-                  {report.coordinates}
-                </Text>
-              </View>
-            </View>
-            <TouchableOpacity
-              style={[styles.viewButton, getViewButtonStyle(report.type)]}
-              onPress={() => {
-                router.push({
-                  pathname: '/details',
-                  params: {
-                    treeId: report.id,
-                    treeName: report.name,
-                    specieName: report.name,
-                    location: report.coordinates,
-                    coordinates: report.coordinates,
-                  },
-                });
-              }}>
-              <Text style={styles.viewButtonText}>View</Text>
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefetching}
+            onRefresh={() => {
+              refetch();
+              setCurrentPage(1);
+            }}
+          />
+        }>
+        {isLoading && reports.length === 0 ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#2E8B57" />
+            <Text style={styles.loadingText}>Loading reports...</Text>
+          </View>
+        ) : error ? (
+          <View style={styles.errorContainer}>
+            <Ionicons name="alert-circle-outline" size={48} color="#FF3B30" />
+            <Text style={styles.errorText}>Failed to load reports</Text>
+            <TouchableOpacity style={styles.retryButton} onPress={() => refetch()}>
+              <Text style={styles.retryButtonText}>Retry</Text>
             </TouchableOpacity>
           </View>
-        ))}
+        ) : reports.length === 0 && !isLoading ? (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="document-text-outline" size={48} color="#999" />
+            <Text style={styles.emptyText}>No reports available</Text>
+          </View>
+        ) : (
+          <>
+            {isLoading && reports.length > 0 && (
+              <View style={styles.pageLoadingOverlay}>
+                <ActivityIndicator size="small" color="#2E8B57" />
+                <Text style={styles.pageLoadingText}>Loading page...</Text>
+              </View>
+            )}
+            {reports.map((report: Report) => {
+              const cardType = getCardType(report.report_type, report.status);
+              const coordinates = formatCoordinates(report.coordinates);
+              const speciesName = report.species_name || report.tree?.species_name;
+              const reportId = report.id ? `#${report.id}` : '';
+              
+              return (
+                <View key={report.id} style={[styles.reportCard, getCardStyle(cardType)]}>
+                  <View style={styles.reportCardContent}>
+                    {reportId && (
+                      <Text style={[styles.reportId, getTextStyle(cardType)]}>
+                        {reportId}
+                      </Text>
+                    )}
+                    {speciesName && (
+                      <Text style={[styles.reportName, getTextStyle(cardType)]}>
+                        {speciesName}
+                      </Text>
+                    )}
+                    {cardType === 'incident' && (
+                      <Text style={styles.incidentLabel}>Report Incident</Text>
+                    )}
+                    {coordinates && coordinates !== 'N/A' && (
+                      <View style={styles.locationRow}>
+                        <Ionicons
+                          name="location"
+                          size={16}
+                          color={cardType === 'dark' || cardType === 'incident' ? '#FFFFFF' : '#666'}
+                        />
+                        <Text style={[styles.coordinates, getTextStyle(cardType)]}>
+                          {coordinates}
+                        </Text>
+                      </View>
+                    )}
+                    {report.ward_name && (
+                      <Text style={[styles.wardName, getTextStyle(cardType)]}>
+                        {report.ward_name}
+                      </Text>
+                    )}
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.viewButton, getViewButtonStyle(cardType)]}
+                    onPress={() => {
+                      router.push({
+                        pathname: '/details',
+                        params: {
+                          treeId: report.tree?.id?.toString() || report.id.toString(),
+                          treeName: speciesName || 'Unknown',
+                          specieName: speciesName || 'Unknown',
+                          location: coordinates,
+                          coordinates: coordinates,
+                          reportId: report.id.toString(),
+                        },
+                      });
+                    }}>
+                    <Text style={styles.viewButtonText}>View</Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
+          </>
+        )}
+
+        {/* Pagination Controls */}
+        {!error && (reports.length > 0 || totalReports > 0) && (
+          <View style={styles.paginationContainer}>
+            <TouchableOpacity
+              style={[
+                styles.paginationButton,
+                (currentPageNum === 1 || isLoading) && styles.paginationButtonDisabled,
+              ]}
+              onPress={() => {
+                if (currentPageNum > 1 && !isLoading) {
+                  setCurrentPage(currentPageNum - 1);
+                }
+              }}
+              disabled={currentPageNum === 1 || isLoading}>
+              {isLoading && currentPageNum > 1 ? (
+                <ActivityIndicator size="small" color="#999" />
+              ) : (
+                <>
+                  <Ionicons
+                    name="chevron-back"
+                    size={20}
+                    color={currentPageNum === 1 ? '#999' : '#2E8B57'}
+                  />
+                  <Text
+                    style={[
+                      styles.paginationButtonText,
+                      currentPageNum === 1 && styles.paginationButtonTextDisabled,
+                    ]}>
+                    Previous
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            <View style={styles.paginationInfo}>
+              {isLoading ? (
+                <>
+                  <ActivityIndicator size="small" color="#2E8B57" />
+                  <Text style={styles.paginationSubtext}>Loading...</Text>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.paginationText}>
+                    Page {currentPageNum} of {pageCount}
+                  </Text>
+                  <Text style={styles.paginationSubtext}>
+                    {totalReports} total {totalReports === 1 ? 'report' : 'reports'}
+                  </Text>
+                </>
+              )}
+            </View>
+
+            <TouchableOpacity
+              style={[
+                styles.paginationButton,
+                (currentPageNum >= pageCount || isLoading) && styles.paginationButtonDisabled,
+              ]}
+              onPress={() => {
+                if (currentPageNum < pageCount && !isLoading) {
+                  setCurrentPage(currentPageNum + 1);
+                }
+              }}
+              disabled={currentPageNum >= pageCount || isLoading}>
+              {isLoading && currentPageNum < pageCount ? (
+                <ActivityIndicator size="small" color="#999" />
+              ) : (
+                <>
+                  <Text
+                    style={[
+                      styles.paginationButtonText,
+                      currentPageNum >= pageCount && styles.paginationButtonTextDisabled,
+                    ]}>
+                    Next
+                  </Text>
+                  <Ionicons
+                    name="chevron-forward"
+                    size={20}
+                    color={currentPageNum >= pageCount ? '#999' : '#2E8B57'}
+                  />
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -168,27 +324,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F5F5F5',
-  },
-  statusBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 0 : 8,
-    paddingBottom: 8,
-    backgroundColor: '#F5F5F5',
-  },
-  statusTime: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#000',
-  },
-  statusIcons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  statusIcon: {
-    marginLeft: 6,
   },
   header: {
     flexDirection: 'row',
@@ -306,5 +441,113 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '600',
+  },
+  wardName: {
+    fontSize: 12,
+    marginTop: 4,
+    opacity: 0.8,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#666',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  errorText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#FF3B30',
+    marginBottom: 16,
+  },
+  retryButton: {
+    backgroundColor: '#2E8B57',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  emptyText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#999',
+  },
+  pageLoadingOverlay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    backgroundColor: '#F9F9F9',
+    marginBottom: 8,
+    borderRadius: 8,
+    gap: 8,
+  },
+  pageLoadingText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  paginationContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
+    marginTop: 8,
+  },
+  paginationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#F5F5F5',
+    gap: 4,
+  },
+  paginationButtonDisabled: {
+    opacity: 0.5,
+  },
+  paginationButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#2E8B57',
+  },
+  paginationButtonTextDisabled: {
+    color: '#999',
+  },
+  paginationInfo: {
+    alignItems: 'center',
+  },
+  paginationText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#000',
+  },
+  paginationSubtext: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
   },
 });

@@ -1,25 +1,26 @@
-import React, { useEffect, useState } from 'react';
-import {
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-  StatusBar,
-  Platform,
-  TextInput,
-  Alert,
-  ActivityIndicator,
-  Image,
-} from 'react-native';
+import { reportService } from '@/services/reportService';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Asset } from 'expo-asset';
 import { File } from 'expo-file-system';
-import { LeafletView } from 'react-native-leaflet-view';
-import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Platform,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { LeafletView } from 'react-native-leaflet-view';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const DEFAULT_MAP_LOCATION = {
   latitude: 1.343434,
@@ -31,27 +32,80 @@ export default function ValidateTreeScreen() {
   const params = useLocalSearchParams();
   const [webViewContent, setWebViewContent] = useState<string | null>(null);
   
+  // Helper to get string param value
+  const getStringParam = (param: string | string[] | undefined, defaultValue: string = ''): string => {
+    if (Array.isArray(param)) return param[0] || defaultValue;
+    return param || defaultValue;
+  };
+  
+  // Store task data in state to persist across re-renders
+  const [taskData, setTaskData] = useState(() => ({
+    treeCode: getStringParam(params.treeCode),
+    speciesName: getStringParam(params.speciesName),
+    speciesId: getStringParam(params.speciesId),
+    custodianName: getStringParam(params.custodianName),
+    custodianPhone: getStringParam(params.custodianPhone),
+    taskId: getStringParam(params.taskId),
+    treeId: getStringParam(params.treeId),
+    custodianId: getStringParam(params.custodianId),
+  }));
+  
   // Get selected specie from route params or use default
   const getInitialSpecie = (): string => {
-    if (params.selectedSpecie) {
-      if (typeof params.selectedSpecie === 'string') {
-        return params.selectedSpecie;
-      }
-      if (Array.isArray(params.selectedSpecie)) {
-        return params.selectedSpecie[0];
-      }
+    // First check for speciesName from task data
+    const speciesNameParam = params.speciesName || params.selectedSpecie;
+    if (speciesNameParam) {
+      const specie = getStringParam(speciesNameParam);
+      if (specie) return specie;
     }
+    // Fallback to stored task data
+    if (taskData.speciesName) return taskData.speciesName;
     return 'Mango';
   };
   
   const [selectedSpecies, setSelectedSpecies] = useState(getInitialSpecie());
   const [accessibility, setAccessibility] = useState<'yes' | 'no'>('yes');
+  const [accessibilityReason, setAccessibilityReason] = useState('');
   const [showSpeciesDropdown, setShowSpeciesDropdown] = useState(false);
-  const [custodianName, setCustodianName] = useState('');
-  const [custodianPhone, setCustodianPhone] = useState('');
   const [currentLocation, setCurrentLocation] = useState(DEFAULT_MAP_LOCATION);
+  const [locationAccuracy, setLocationAccuracy] = useState<string>('');
+  const [locationObject, setLocationObject] = useState<Location.LocationObject | null>(null);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [treeImage, setTreeImage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Update task data when params change (but preserve existing values if params are empty)
+  useEffect(() => {
+    const newTreeCode = getStringParam(params.treeCode);
+    const newSpeciesName = getStringParam(params.speciesName);
+    const newSpeciesId = getStringParam(params.speciesId);
+    const newCustodianName = getStringParam(params.custodianName);
+    const newCustodianPhone = getStringParam(params.custodianPhone);
+    const newTaskId = getStringParam(params.taskId);
+    const newTreeId = getStringParam(params.treeId);
+    const newCustodianId = getStringParam(params.custodianId);
+    
+    // Only update if we have new values (preserve existing state)
+    setTaskData(prev => ({
+      treeCode: newTreeCode || prev.treeCode,
+      speciesName: newSpeciesName || prev.speciesName,
+      speciesId: newSpeciesId || prev.speciesId,
+      custodianName: newCustodianName || prev.custodianName,
+      custodianPhone: newCustodianPhone || prev.custodianPhone,
+      taskId: newTaskId || prev.taskId,
+      treeId: newTreeId || prev.treeId,
+      custodianId: newCustodianId || prev.custodianId,
+    }));
+  }, [
+    params.treeCode,
+    params.speciesName,
+    params.speciesId,
+    params.custodianName,
+    params.custodianPhone,
+    params.taskId,
+    params.treeId,
+    params.custodianId,
+  ]);
 
   useEffect(() => {
     let isMounted = true;
@@ -86,17 +140,63 @@ export default function ValidateTreeScreen() {
 
   // Update selected species when params change
   useEffect(() => {
-    if (params.selectedSpecie) {
-      const specie = typeof params.selectedSpecie === 'string' 
-        ? params.selectedSpecie 
-        : Array.isArray(params.selectedSpecie) 
-        ? params.selectedSpecie[0] 
-        : null;
+    // Prioritize speciesName from task data or selectedSpecie from navigation
+    const specieParam = params.speciesName || params.selectedSpecie;
+    if (specieParam) {
+      const specie = getStringParam(specieParam);
       if (specie) {
         setSelectedSpecies(specie);
+        // Also update task data if speciesName changed
+        if (params.speciesName) {
+          setTaskData(prev => ({ ...prev, speciesName: specie }));
+        }
       }
+    } else if (taskData.speciesName) {
+      // Fallback to stored task data
+      setSelectedSpecies(taskData.speciesName);
     }
-  }, [params.selectedSpecie]);
+  }, [params.speciesName, params.selectedSpecie, taskData.speciesName]);
+
+  // Try to get location automatically on mount (optional - can be removed if not desired)
+  useEffect(() => {
+    const tryGetLocation = async () => {
+      try {
+        // Check if we already have permission
+        const { status } = await Location.getForegroundPermissionsAsync();
+        if (status === 'granted') {
+          // Silently try to get location without showing alerts
+          const enabled = await Location.hasServicesEnabledAsync();
+          if (enabled) {
+            try {
+              // Try with lowest accuracy first for faster response
+              const location = await Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.Lowest,
+              });
+              if (location?.coords && location.coords.latitude && location.coords.longitude) {
+                setCurrentLocation({
+                  latitude: location.coords.latitude,
+                  longitude: location.coords.longitude,
+                });
+              }
+            } catch (error: any) {
+              // Silently fail - user can manually request location
+              // Only log if it's not a common "unavailable" error
+              if (error.code !== 'UNAVAILABLE' && !error.message?.includes('unavailable')) {
+                console.log('Auto-location fetch failed:', error);
+              }
+            }
+          }
+        }
+      } catch (error) {
+        // Silently fail - user can manually request location
+        console.log('Auto-location permission check failed:', error);
+      }
+    };
+
+    // Small delay to let the screen render first
+    const timer = setTimeout(tryGetLocation, 1000);
+    return () => clearTimeout(timer);
+  }, []);
 
   const getCurrentLocation = async () => {
     try {
@@ -107,7 +207,7 @@ export default function ValidateTreeScreen() {
       if (status !== 'granted') {
         Alert.alert(
           'Permission Denied',
-          'Location permission is required to validate the actual location.',
+          'Location permission is required to validate the actual location. Please enable it in your device settings.',
         );
         setIsGettingLocation(false);
         return;
@@ -124,23 +224,79 @@ export default function ValidateTreeScreen() {
         return;
       }
 
-      // Get current position
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
+      // Get current position with better options
+      // Try with lower accuracy first for faster response, then fallback to higher accuracy if needed
+      let location: Location.LocationObject;
+      
+      try {
+        // First try with lower accuracy for faster response
+        location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Low, // Lower accuracy is faster
+        });
+      } catch (error: any) {
+        // If low accuracy fails, try balanced accuracy
+        console.log('Low accuracy failed, trying balanced:', error);
+        try {
+          location = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          });
+        } catch (error2: any) {
+          // If balanced fails, try with any available accuracy
+          console.log('Balanced accuracy failed, trying lowest:', error2);
+          location = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Lowest,
+          });
+        }
+      }
+
+      // Validate location data
+      if (!location || !location.coords) {
+        throw new Error('Invalid location data received');
+      }
 
       const newLocation = {
         latitude: location.coords.latitude,
         longitude: location.coords.longitude,
       };
 
+      // Validate coordinates are valid numbers
+      if (
+        isNaN(newLocation.latitude) ||
+        isNaN(newLocation.longitude) ||
+        newLocation.latitude === 0 ||
+        newLocation.longitude === 0
+      ) {
+        throw new Error('Invalid coordinates received');
+      }
+
       setCurrentLocation(newLocation);
+      // Store location object and accuracy for metadata
+      setLocationObject(location);
+      if (location.coords.accuracy) {
+        setLocationAccuracy(location.coords.accuracy.toString());
+      }
       setIsGettingLocation(false);
 
       Alert.alert('Success', 'Location updated successfully!');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error getting location:', error);
-      Alert.alert('Error', 'Failed to get your location. Please try again.');
+      
+      let errorMessage = 'Failed to get your location. Please try again.';
+      
+      if (error.code === 'TIMEOUT' || error.message?.includes('timeout')) {
+        errorMessage = 'Location request timed out. Please ensure you are in an area with good GPS signal and try again.';
+      } else if (error.code === 'UNAVAILABLE' || error.message?.includes('unavailable') || error.message?.includes('Make sure that location services are enabled')) {
+        errorMessage = 'Location services are currently unavailable. Please:\n\n1. Enable location services in your device settings\n2. Make sure GPS is enabled\n3. Try moving to an area with better GPS signal\n4. Wait a few seconds and try again';
+      } else if (error.code === 'PERMISSION_DENIED') {
+        errorMessage = 'Location permission was denied. Please enable location access in your device settings.';
+      } else if (error.message) {
+        errorMessage = `Error: ${error.message}`;
+      }
+      
+      Alert.alert(
+        'Location Error',
+        errorMessage + '\n\nTips:\n- Make sure location services are enabled\n- Try moving to an area with better GPS signal\n- Check that the app has location permissions',
+      );
       setIsGettingLocation(false);
     }
   };
@@ -158,8 +314,8 @@ export default function ValidateTreeScreen() {
       }
 
       // Launch camera (camera only, no gallery)
+      // mediaTypes omitted - defaults to images
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: false,
         quality: 0.8,
       });
@@ -173,19 +329,148 @@ export default function ValidateTreeScreen() {
     }
   };
 
+  const handleSubmit = async () => {
+    try {
+      // Validation
+      if (!treeImage) {
+        Alert.alert('Error', 'Please capture a tree photo before submitting.');
+        return;
+      }
+
+      if (!taskData.treeId) {
+        Alert.alert('Error', 'Tree ID is missing. Please go back and try again.');
+        return;
+      }
+
+      if (!taskData.speciesId) {
+        Alert.alert('Error', 'Species ID is missing. Please select a species.');
+        return;
+      }
+
+      if (!taskData.taskId) {
+        Alert.alert('Error', 'Task ID is missing. Please go back and try again.');
+        return;
+      }
+
+      // Validate accessibility comment if accessibility is "no"
+      if (accessibility === 'no' && !accessibilityReason.trim()) {
+        Alert.alert('Error', 'Please provide a comment explaining why the tree is not accessible.');
+        return;
+      }
+
+      setIsSubmitting(true);
+
+      // Create FormData
+      const formData = new FormData();
+
+      // Add image file
+      // For React Native, FormData file format should be: { uri, type, name }
+      const imageUri = treeImage;
+      const filename = imageUri.split('/').pop() || 'tree-photo.jpg';
+      const match = /\.(\w+)$/.exec(filename);
+      const type = match ? `image/${match[1]}` : 'image/jpeg';
+
+      // React Native FormData file format
+      formData.append('file', {
+        uri: Platform.OS === 'ios' ? imageUri.replace('file://', '') : imageUri,
+        type,
+        name: filename,
+      } as any);
+
+      // Add required fields
+      // FormData.append requires all values to be strings in React Native
+      formData.append('tree_id', taskData.treeId);
+      formData.append('task_id', taskData.taskId);
+      formData.append('species_id', taskData.speciesId);
+      formData.append('is_accessible', accessibility === 'yes' ? 'true' : 'false');
+      // Latitude and longitude as strings (API expects numbers but FormData needs strings)
+      formData.append('latitude', currentLocation.latitude.toString());
+      formData.append('longitude', currentLocation.longitude.toString());
+
+      // Add optional fields
+      // Always include accessibility_reason if accessibility is "no" (even if empty, but we validate it's not empty)
+      if (accessibility === 'no') {
+        formData.append('accessibility_reason', accessibilityReason);
+      }
+
+      if (locationAccuracy) {
+        formData.append('location_accuracy', locationAccuracy);
+      }
+
+      // Add location metadata as JSON string
+      const locationMetadata: any = {
+        timestamp: new Date().toISOString(),
+      };
+      
+      if (locationObject?.coords) {
+        if (locationObject.coords.accuracy !== null && locationObject.coords.accuracy !== undefined) {
+          locationMetadata.accuracy = locationObject.coords.accuracy;
+        }
+        if (locationObject.coords.altitude !== null && locationObject.coords.altitude !== undefined) {
+          locationMetadata.altitude = locationObject.coords.altitude;
+        }
+        if (locationObject.coords.heading !== null && locationObject.coords.heading !== undefined) {
+          locationMetadata.heading = locationObject.coords.heading;
+        }
+        if (locationObject.coords.speed !== null && locationObject.coords.speed !== undefined) {
+          locationMetadata.speed = locationObject.coords.speed;
+        }
+      }
+      
+      formData.append('location_metadata', JSON.stringify(locationMetadata));
+
+      if (taskData.custodianName) {
+        formData.append('custodian_name', taskData.custodianName);
+      }
+
+      if (taskData.custodianPhone) {
+        formData.append('custodian_phone', taskData.custodianPhone);
+      }
+
+      // Log FormData contents in development
+      if (__DEV__) {
+        console.log('[Validate] Submitting form with:', {
+          treeId: taskData.treeId,
+          taskId: taskData.taskId,
+          speciesId: taskData.speciesId,
+          isAccessible: accessibility === 'yes',
+          latitude: currentLocation.latitude,
+          longitude: currentLocation.longitude,
+          hasImage: !!treeImage,
+          imageUri: treeImage,
+        });
+      }
+
+      // Submit to API
+      const response = await reportService.validateTree(formData);
+
+      setIsSubmitting(false);
+
+      Alert.alert(
+        'Success',
+        response.message || 'Tree validated successfully!',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              // Navigate back to schedule page
+              router.back();
+            },
+          },
+        ]
+      );
+    } catch (error: any) {
+      setIsSubmitting(false);
+      console.error('Error submitting validation:', error);
+      
+      const errorMessage = error.message || 'Failed to validate tree. Please try again.';
+      Alert.alert('Error', errorMessage);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle="dark-content" backgroundColor="#F5F5F5" />
-
-      {/* Status Bar */}
-      <View style={styles.statusBar}>
-        <Text style={styles.statusTime}>9:41</Text>
-        <View style={styles.statusIcons}>
-          <Ionicons name="cellular" size={18} color="#000" />
-          <Ionicons name="wifi" size={18} color="#000" style={styles.statusIcon} />
-          <Ionicons name="battery-full" size={18} color="#000" style={styles.statusIcon} />
-        </View>
-      </View>
 
       {/* Header */}
       <View style={styles.header}>
@@ -211,7 +496,7 @@ export default function ValidateTreeScreen() {
         showsVerticalScrollIndicator={false}>
         {/* Tree ID Section */}
         <View style={styles.treeIdSection}>
-          <Text style={styles.treeIdText}>TreeID/325345</Text>
+          <Text style={styles.treeIdText}>TreeID/{taskData.treeCode || 'N/A'}</Text>
         </View>
 
         {/* Map Section */}
@@ -242,7 +527,6 @@ export default function ValidateTreeScreen() {
                 ]}
                 zoomControl={true}
                 attributionControl={true}
-                style={{ flex: 1, width: '100%', height: '100%' }}
                 doDebug={false}
                 key={`${currentLocation.latitude}-${currentLocation.longitude}`}
               />
@@ -270,23 +554,24 @@ export default function ValidateTreeScreen() {
           </View>
         </View>
 
-        {/* Custodian Input Fields */}
-        <View style={styles.inputSection}>
-          <TextInput
-            style={styles.inputField}
-            placeholder="Add Custodian name."
-            placeholderTextColor="#999"
-            value={custodianName}
-            onChangeText={setCustodianName}
-          />
-          <TextInput
-            style={styles.inputField}
-            placeholder="Add Custodian Phone number."
-            placeholderTextColor="#999"
-            value={custodianPhone}
-            onChangeText={setCustodianPhone}
-            keyboardType="phone-pad"
-          />
+        {/* Tree Information Section */}
+        <View style={styles.treeInfoSection}>
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Tree specie:</Text>
+            <Text style={styles.infoValue}>{taskData.speciesName || selectedSpecies || 'N/A'}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Tree ID:</Text>
+            <Text style={styles.infoValue}>{taskData.treeCode || 'N/A'}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Custodian Name:</Text>
+            <Text style={styles.infoValue}>{taskData.custodianName || 'N/A'}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Phone No:</Text>
+            <Text style={styles.infoValue}>{taskData.custodianPhone || 'N/A'}</Text>
+          </View>
         </View>
 
         {/* Tree Species Selection */}
@@ -295,7 +580,20 @@ export default function ValidateTreeScreen() {
             <Text style={styles.formLabel}>Tree Species</Text>
             <TouchableOpacity
               style={styles.viewSpecieButton}
-              onPress={() => router.push('/treelist')}>
+              onPress={() => router.push({
+                pathname: '/treelist',
+                params: {
+                  // Pass current task data so it can be preserved when navigating back
+                  taskId: taskData.taskId,
+                  treeId: taskData.treeId,
+                  treeCode: taskData.treeCode,
+                  speciesName: taskData.speciesName || selectedSpecies,
+                  speciesId: taskData.speciesId,
+                  custodianName: taskData.custodianName,
+                  custodianPhone: taskData.custodianPhone,
+                  custodianId: taskData.custodianId || '',
+                },
+              })}>
               <Text style={styles.viewSpecieText}>View Specie</Text>
             </TouchableOpacity>
           </View>
@@ -328,6 +626,21 @@ export default function ValidateTreeScreen() {
               <Text style={styles.radioLabel}>No</Text>
             </TouchableOpacity>
           </View>
+          {accessibility === 'no' && (
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Comment (Required)</Text>
+              <TextInput
+                style={styles.commentInput}
+                placeholder="Please provide a reason why the tree is not accessible"
+                placeholderTextColor="#999"
+                value={accessibilityReason}
+                onChangeText={setAccessibilityReason}
+                multiline
+                numberOfLines={4}
+                textAlignVertical="top"
+              />
+            </View>
+          )}
         </View>
 
         {/* Initial Picture */}
@@ -357,8 +670,18 @@ export default function ValidateTreeScreen() {
 
       {/* Submit Task Button */}
       <View style={styles.submitContainer}>
-        <TouchableOpacity style={styles.submitButton}>
-          <Text style={styles.submitButtonText}>Submit Task</Text>
+        <TouchableOpacity
+          style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
+          onPress={handleSubmit}
+          disabled={isSubmitting}>
+          {isSubmitting ? (
+            <>
+              <ActivityIndicator size="small" color="#FFFFFF" style={styles.submitSpinner} />
+              <Text style={styles.submitButtonText}>Submitting...</Text>
+            </>
+          ) : (
+            <Text style={styles.submitButtonText}>Submit Task</Text>
+          )}
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -369,27 +692,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F5F5F5',
-  },
-  statusBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 0 : 8,
-    paddingBottom: 8,
-    backgroundColor: '#F5F5F5',
-  },
-  statusTime: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#000',
-  },
-  statusIcons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  statusIcon: {
-    marginLeft: 6,
   },
   header: {
     flexDirection: 'row',
@@ -499,19 +801,33 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
   },
-  inputSection: {
-    marginBottom: 20,
-    gap: 12,
-  },
-  inputField: {
+  treeInfoSection: {
     backgroundColor: '#FFFFFF',
     borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 14,
-    color: '#000',
+    padding: 16,
+    marginBottom: 20,
     borderWidth: 1,
     borderColor: '#E0E0E0',
+    gap: 12,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  infoLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+    flex: 1,
+  },
+  infoValue: {
+    fontSize: 14,
+    color: '#000',
+    fontWeight: '500',
+    flex: 1,
+    textAlign: 'right',
   },
   formSection: {
     marginBottom: 20,
@@ -631,10 +947,51 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+  },
+  submitButtonDisabled: {
+    opacity: 0.7,
+  },
+  submitSpinner: {
+    marginRight: 8,
   },
   submitButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  inputContainer: {
+    marginTop: 12,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#666',
+    marginBottom: 8,
+  },
+  inputField: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: '#000',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  commentInput: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: '#000',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    minHeight: 100,
+    textAlignVertical: 'top',
   },
 });

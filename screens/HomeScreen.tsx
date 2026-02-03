@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useTasksCount } from '@/hooks/useTasks';
 import { Asset } from "expo-asset";
 import { File } from 'expo-file-system';
-import { LeafletView } from 'react-native-leaflet-view';
 import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { LeafletView } from 'react-native-leaflet-view';
 
 const DEFAULT_LOCATION = {
   latitude: 9.0765,
@@ -13,6 +14,7 @@ const DEFAULT_LOCATION = {
 const HomeScreen = () => {
   const router = useRouter();
   const [webViewContent, setWebViewContent] = useState<string | null>(null);
+  const { total: tasksCount, isLoading: isLoadingTasks } = useTasksCount();
 
   useEffect(() => {
     let isMounted = true;
@@ -85,7 +87,9 @@ const HomeScreen = () => {
           onPress={() => router.push('/(tabs)/two')}
           activeOpacity={0.8}>
           <Text style={styles.tasksLabel}>Assigned Tasks</Text>
-          <Text style={styles.tasksCount}>3 Tasks</Text>
+          <Text style={styles.tasksCount}>
+            {isLoadingTasks ? 'Loading...' : `${tasksCount} ${tasksCount === 1 ? 'Task' : 'Tasks'}`}
+          </Text>
         </TouchableOpacity>
 
         <View style={styles.mapCard}>
@@ -115,7 +119,6 @@ const HomeScreen = () => {
                 ]}
                 zoomControl={true}
                 attributionControl={true}
-                style={{ flex: 1, width: '100%', height: '100%' }}
                 doDebug={false}
                 onError={(error) => {
                   Alert.alert('Map Error', JSON.stringify(error));

@@ -1,23 +1,22 @@
+import { Ionicons } from '@expo/vector-icons';
+import { Asset } from 'expo-asset';
+import { File } from 'expo-file-system';
+import * as ImagePicker from 'expo-image-picker';
+import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
+  Alert,
+  Image,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  View,
-  StatusBar,
-  Platform,
-  Image,
-  Alert,
+  View
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { Asset } from 'expo-asset';
-import { File } from 'expo-file-system';
 import { LeafletView } from 'react-native-leaflet-view';
-import * as ImagePicker from 'expo-image-picker';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const MAP_LOCATION = {
   latitude: 1.343434,
@@ -124,8 +123,8 @@ export default function GrowthCheckScreen() {
       }
 
       // Launch camera (camera only, no gallery, no cropping)
+      // mediaTypes omitted - defaults to images
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: false,
         quality: 0.8,
       });
@@ -394,16 +393,6 @@ export default function GrowthCheckScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle="dark-content" backgroundColor="#F5F5F5" />
 
-      {/* Status Bar */}
-      <View style={styles.statusBar}>
-        <Text style={styles.statusTime}>9:41</Text>
-        <View style={styles.statusIcons}>
-          <Ionicons name="cellular" size={18} color="#000" />
-          <Ionicons name="wifi" size={18} color="#000" style={styles.statusIcon} />
-          <Ionicons name="battery-full" size={18} color="#000" style={styles.statusIcon} />
-        </View>
-      </View>
-
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
@@ -456,7 +445,6 @@ export default function GrowthCheckScreen() {
                 ]}
                 zoomControl={true}
                 attributionControl={true}
-                style={{ flex: 1, width: '100%', height: '100%' }}
                 doDebug={false}
               />
             </View>
@@ -527,27 +515,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F5F5F5',
-  },
-  statusBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 0 : 8,
-    paddingBottom: 8,
-    backgroundColor: '#F5F5F5',
-  },
-  statusTime: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#000',
-  },
-  statusIcons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  statusIcon: {
-    marginLeft: 6,
   },
   header: {
     flexDirection: 'row',

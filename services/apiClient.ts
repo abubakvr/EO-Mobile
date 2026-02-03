@@ -1,4 +1,5 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
+import { tokenStorage } from './tokenStorage';
 
 /**
  * API Client Configuration
@@ -43,18 +44,56 @@ export interface RequestConfig extends AxiosRequestConfig {
  */
 class ApiClient {
   private client: AxiosInstance;
+  private accessToken: string | null = null;
+  private onUnauthorizedCallback?: () => void;
 
   constructor() {
     this.client = axios.create({
       baseURL: API_BASE_URL,
       timeout: 30000, // 30 seconds
       headers: {
-        'Content-Type': 'application/json',
         'Accept': 'application/json',
+        // Don't set Content-Type here - let it be set per-request based on data type
       },
+      // For React Native, we need to handle FormData specially
+      // Don't use transformRequest - let FormData pass through naturally
     });
 
     this.setupInterceptors();
+    this.loadTokenFromStorage();
+  }
+
+  /**
+   * Load token from secure storage on initialization
+   */
+  private async loadTokenFromStorage(): Promise<void> {
+    try {
+      const token = await tokenStorage.getAccessToken();
+      if (token) {
+        this.accessToken = token;
+        this.setAuthToken(token);
+      }
+    } catch (error) {
+      console.error('Failed to load token from storage:', error);
+    }
+  }
+
+  /**
+   * Set callback for unauthorized access
+   */
+  setUnauthorizedCallback(callback: () => void): void {
+    this.onUnauthorizedCallback = callback;
+  }
+
+  /**
+   * Check if URL should skip authentication
+   */
+  private shouldSkipAuth(url?: string): boolean {
+    if (!url) return false;
+    // Skip auth for login and signup endpoints
+    return url.includes('/api/auth/login') || 
+           url.includes('/api/auth/signup') || 
+           url.includes('/api/auth/register');
   }
 
   /**
@@ -64,17 +103,48 @@ class ApiClient {
     // Request interceptor - Add auth token, modify requests
     this.client.interceptors.request.use(
       (config) => {
-        // Add authentication token if available
-        const token = this.getAuthToken();
-        if (token && !(config as RequestConfig).skipAuth) {
-          config.headers.Authorization = `Bearer ${token}`;
+        // Check if this endpoint should skip auth
+        const skipAuth = (config as RequestConfig).skipAuth || this.shouldSkipAuth(config.url);
+        
+        // Handle authentication token
+        if (skipAuth) {
+          // Explicitly remove Authorization header for endpoints that should skip auth
+          delete config.headers.Authorization;
+        } else {
+          // Add authentication token if available
+          const token = this.getAuthToken();
+          if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
+          } else {
+            // Remove Authorization header if no token available
+            delete config.headers.Authorization;
+          }
+        }
+
+        // Handle Content-Type for FormData
+        // In React Native, FormData must pass through without any transformation
+        if (config.data instanceof FormData) {
+          // Remove any Content-Type header - React Native network layer will set it automatically
+          delete config.headers['Content-Type'];
+          delete config.headers['content-type'];
+          // Ensure FormData is not transformed
+          // React Native's network layer needs FormData to be passed as-is
+        } else if (!config.headers['Content-Type'] && !config.headers['content-type']) {
+          // For non-FormData object requests, set application/json
+          if (config.data && typeof config.data === 'object' && !(config.data instanceof FormData)) {
+            config.headers['Content-Type'] = 'application/json';
+          }
         }
 
         // Log request in development
         if (__DEV__) {
           console.log(`[API Request] ${config.method?.toUpperCase()} ${config.url}`, {
             params: config.params,
-            data: config.data,
+            data: config.data instanceof FormData ? '[FormData]' : config.data,
+            headers: {
+              Authorization: config.headers.Authorization ? 'Bearer ***' : 'None',
+              'Content-Type': config.headers['Content-Type'],
+            },
           });
         }
 
@@ -117,7 +187,7 @@ class ApiClient {
           switch (statusCode) {
             case 401:
               // Unauthorized - Clear token and redirect to login
-              this.handleUnauthorized();
+              this.handleUnauthorized().catch(console.error);
               break;
             case 403:
               // Forbidden
@@ -146,12 +216,32 @@ class ApiClient {
           );
         } else if (error.request) {
           // Request made but no response received
+          let errorMessage = 'Network error. Please check your connection.';
+          
+          // Check for specific network error types
+          const requestError = error.request?._response || error.message || '';
+          if (typeof requestError === 'string') {
+            if (requestError.includes('timeout') || error.code === 'ECONNABORTED') {
+              errorMessage = 'Request timed out. The server may be slow or unavailable. Please try again.';
+            } else if (requestError.includes('Unable to resolve host') || requestError.includes('No address associated with hostname')) {
+              errorMessage = `Unable to connect to server (${API_BASE_URL}). Please check:\n\n1. Your internet connection\n2. The API server is accessible\n3. DNS settings`;
+            } else if (requestError.includes('Network request failed')) {
+              errorMessage = 'Network request failed. Please check your internet connection.';
+            }
+          }
+          
           if (__DEV__) {
-            console.error('[API Error] No response received', error.request);
+            console.error('[API Error] No response received', {
+              url: error.config?.url,
+              baseURL: error.config?.baseURL || API_BASE_URL,
+              method: error.config?.method,
+              error: requestError,
+              code: error.code,
+            });
           }
 
           return Promise.reject(
-            new ApiError('Network error. Please check your connection.', 0)
+            new ApiError(errorMessage, 0, error.request)
           );
         } else {
           // Error setting up request
@@ -166,25 +256,25 @@ class ApiClient {
   }
 
   /**
-   * Get authentication token from storage
-   * Override this method to implement your token storage logic
+   * Get authentication token from memory
    */
   private getAuthToken(): string | null {
-    // TODO: Implement token retrieval from AsyncStorage or secure storage
-    // Example:
-    // return await AsyncStorage.getItem('authToken');
-    return null;
+    return this.accessToken;
   }
 
   /**
    * Handle unauthorized access
-   * Override this method to implement your logout/redirect logic
    */
-  private handleUnauthorized(): void {
-    // TODO: Implement logout logic
-    // Example:
-    // AsyncStorage.removeItem('authToken');
-    // NavigationService.navigate('Login');
+  private async handleUnauthorized(): Promise<void> {
+    // Clear tokens
+    this.accessToken = null;
+    this.setAuthToken(null);
+    await tokenStorage.clearTokens();
+
+    // Call unauthorized callback if set
+    if (this.onUnauthorizedCallback) {
+      this.onUnauthorizedCallback();
+    }
   }
 
   /**
@@ -262,8 +352,9 @@ class ApiClient {
     }
 
     const config: RequestConfig = {
+      // Don't set Content-Type - axios will set it automatically with boundary for FormData
       headers: {
-        'Content-Type': 'multipart/form-data',
+        Accept: 'application/json',
       },
       onUploadProgress: (progressEvent) => {
         if (onProgress && progressEvent.total) {
@@ -281,11 +372,15 @@ class ApiClient {
 
   /**
    * Set authentication token
+   * Note: We don't set it in defaults.headers.common because we handle it per-request
+   * in the interceptor to allow skipping auth for certain endpoints
    */
   setAuthToken(token: string | null): void {
-    if (token) {
-      this.client.defaults.headers.common.Authorization = `Bearer ${token}`;
-    } else {
+    this.accessToken = token;
+    // Don't set in defaults.headers.common - let the interceptor handle it per-request
+    // This allows us to skip auth for login/signup endpoints
+    if (!token) {
+      // Only remove from defaults if token is cleared
       delete this.client.defaults.headers.common.Authorization;
     }
   }
