@@ -1,4 +1,6 @@
+import { useAuth } from '@/hooks/useAuth';
 import { useTasksCount } from '@/hooks/useTasks';
+import { Ionicons } from '@expo/vector-icons';
 import { Asset } from "expo-asset";
 import { File } from 'expo-file-system';
 import { useRouter } from 'expo-router';
@@ -15,6 +17,7 @@ const HomeScreen = () => {
   const router = useRouter();
   const [webViewContent, setWebViewContent] = useState<string | null>(null);
   const { total: tasksCount, isLoading: isLoadingTasks } = useTasksCount();
+  const { logout } = useAuth();
 
   useEffect(() => {
     let isMounted = true;
@@ -54,7 +57,18 @@ const HomeScreen = () => {
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}>
-        <Text style={styles.headerTitle}>Home</Text>
+        {/* Header Section */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Home</Text>
+          <View style={styles.headerRight}>
+            <TouchableOpacity style={styles.iconButton}>
+              <Ionicons name="notifications-outline" size={24} color="#000" />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => logout()}>
+              <Text style={styles.signOutText}>Sign Out</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
 
         <View style={styles.topRow}>
           <View style={styles.profileRow}>
@@ -71,9 +85,6 @@ const HomeScreen = () => {
           </View>
 
           <View style={styles.actionsColumn}>
-            <TouchableOpacity style={styles.iconChip}>
-              <Text style={styles.iconChipText}>🔔</Text>
-            </TouchableOpacity>
             <TouchableOpacity
               style={styles.primaryChip}
               onPress={() => router.push('/validate')}>
@@ -156,11 +167,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 120,
   },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    marginTop: 16,
+  },
   headerTitle: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '700',
     color: '#222222',
-    marginBottom: 16,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  iconButton: {
+    padding: 4,
+  },
+  signOutText: {
+    fontSize: 12,
+    color: '#000',
+    fontWeight: '500',
   },
   topRow: {
     flexDirection: 'row',
@@ -179,12 +209,12 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   profileName: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
     color: '#222222',
   },
   profileSubtitle: {
-    fontSize: 12,
+    fontSize: 10,
     color: '#777777',
   },
   actionsColumn: {
@@ -227,7 +257,7 @@ const styles = StyleSheet.create({
   },
   tasksCount: {
     color: '#FFFFFF',
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: '700',
   },
   mapCard: {

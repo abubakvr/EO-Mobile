@@ -108,6 +108,18 @@ export default function ReportsScreen() {
     }
   };
 
+  const getViewButtonTextStyle = (type: string) => {
+    switch (type) {
+      case 'dark':
+      case 'normal':
+        return styles.viewButtonTextWhite; // Green buttons get white text
+      case 'incident':
+        return styles.viewButtonTextGray; // Red button gets gray text
+      default:
+        return styles.viewButtonTextWhite;
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
 
@@ -172,23 +184,25 @@ export default function ReportsScreen() {
               const cardType = getCardType(report.report_type, report.status);
               const coordinates = formatCoordinates(report.coordinates);
               const speciesName = report.species_name || report.tree?.species_name;
-              const reportId = report.id ? `#${report.id}` : '';
+              const reportId = report.id ? `${report.id} -` : '';
               
               return (
                 <View key={report.id} style={[styles.reportCard, getCardStyle(cardType)]}>
                   <View style={styles.reportCardContent}>
-                    {reportId && (
-                      <Text style={[styles.reportId, getTextStyle(cardType)]}>
-                        {reportId}
-                      </Text>
-                    )}
-                    {speciesName && (
-                      <Text style={[styles.reportName, getTextStyle(cardType)]}>
-                        {speciesName}
-                      </Text>
-                    )}
+                    <View style={styles.reportCardTitle}>
+                      {reportId && (
+                        <Text style={[styles.reportId, getTextStyle(cardType)]}>
+                          {reportId}
+                        </Text>
+                      )}
+                      {speciesName && (
+                        <Text style={[styles.reportName, getTextStyle(cardType)]}>
+                          {speciesName}
+                        </Text>
+                      )}
+                    </View>
                     {cardType === 'incident' && (
-                      <Text style={styles.incidentLabel}>Report Incident</Text>
+                      <Text style={styles.incidentLabel}>Incident Report</Text>
                     )}
                     {coordinates && coordinates !== 'N/A' && (
                       <View style={styles.locationRow}>
@@ -223,7 +237,7 @@ export default function ReportsScreen() {
                         },
                       });
                     }}>
-                    <Text style={styles.viewButtonText}>View</Text>
+                    <Text style={[styles.viewButtonText, getViewButtonTextStyle(cardType)]}>View</Text>
                   </TouchableOpacity>
                 </View>
               );
@@ -330,33 +344,34 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 20,
+    paddingBottom: 16,
+    marginTop: 16,
     backgroundColor: '#F5F5F5',
   },
   headerLeft: {
     flex: 1,
   },
   title: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#000',
     marginBottom: 4,
   },
   breadcrumb: {
-    fontSize: 14,
+    fontSize: 10,
     color: '#666',
   },
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
+    marginTop: 4,
   },
   iconButton: {
     padding: 4,
   },
   signOutText: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#000',
     fontWeight: '500',
   },
@@ -372,24 +387,38 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 16,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
   },
+  reportCardTitle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   normalCard: {
-    backgroundColor: '#E8F5ED', // Light green tint
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D0E7D0',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.07,
+    shadowRadius: 2,
   },
   darkCard: {
     backgroundColor: '#2E8B57', // Dark green
   },
   incidentCard: {
-    backgroundColor: '#C62828', // Dark red
+    backgroundColor: '#AA1F21', // Dark red
   },
   reportCardContent: {
     flex: 1,
     marginRight: 12,
   },
   reportId: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
     marginBottom: 4,
   },
@@ -400,7 +429,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   reportName: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
     marginBottom: 4,
   },
@@ -418,12 +447,14 @@ const styles = StyleSheet.create({
   },
   coordinates: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '400',
+    color: '#36454F',
+    opacity: 0.8,
   },
   viewButton: {
     paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
+    paddingVertical: 8,
+    borderRadius: 12,
     minWidth: 80,
     alignItems: 'center',
     justifyContent: 'center',
@@ -431,16 +462,21 @@ const styles = StyleSheet.create({
   viewButtonDarkGreen: {
     backgroundColor: '#2E8B57', // Dark green button
   },
+  viewButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  viewButtonTextWhite: {
+    color: '#FFFFFF', // White text for green buttons
+  },
+  viewButtonTextGray: {
+    color: '#7D7D7D', // Gray text for red button
+  },
   viewButtonLightGreen: {
     backgroundColor: '#2E8B57', // Light green button
   },
   viewButtonLightRed: {
-    backgroundColor: '#EF5350', // Light red button
-  },
-  viewButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
+    backgroundColor: '#FFFFFF', // Light red button (white background)
   },
   wardName: {
     fontSize: 12,

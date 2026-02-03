@@ -469,7 +469,7 @@ export default function ValidateTreeScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <StatusBar barStyle="dark-content" backgroundColor="#F5F5F5" />
 
       {/* Header */}
@@ -495,9 +495,9 @@ export default function ValidateTreeScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}>
         {/* Tree ID Section */}
-        <View style={styles.treeIdSection}>
+        {/* <View style={styles.treeIdSection}>
           <Text style={styles.treeIdText}>TreeID/{taskData.treeCode || 'N/A'}</Text>
-        </View>
+        </View> */}
 
         {/* Map Section */}
         <View style={styles.mapContainer}>
@@ -698,7 +698,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingVertical: 20,
     backgroundColor: '#F5F5F5',
   },
   headerLeft: {
@@ -709,9 +709,12 @@ const styles = StyleSheet.create({
   },
   backButton: {
     marginRight: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 100,
+    padding: 8,
   },
   headerTitle: {
-    fontSize: 16,
+    fontSize: 12,
     fontWeight: '600',
     color: '#000',
   },
@@ -724,7 +727,7 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   signOutText: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#000',
     fontWeight: '500',
   },
@@ -749,6 +752,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginBottom: 16,
     backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#6B7280',
   },
   map: {
     width: '100%',
@@ -772,7 +777,7 @@ const styles = StyleSheet.create({
   validateLocationButton: {
     backgroundColor: '#4A4A4A',
     borderRadius: 8,
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     paddingVertical: 12,
     flex: 1,
     minHeight: 44,
@@ -784,21 +789,22 @@ const styles = StyleSheet.create({
   },
   validateLocationText: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 10,
     fontWeight: '500',
     textAlign: 'center',
   },
   coordinatesContainer: {
     flex: 1,
+    alignItems: 'flex-end',
   },
   coordinatesLabel: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#000',
     fontWeight: '500',
     marginBottom: 4,
   },
   coordinatesValue: {
-    fontSize: 14,
+    fontSize: 11,
     color: '#666',
   },
   treeInfoSection: {
@@ -814,16 +820,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: 4,
   },
   infoLabel: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
     color: '#666',
     flex: 1,
   },
   infoValue: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#000',
     fontWeight: '500',
     flex: 1,
@@ -845,14 +851,16 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   viewSpecieButton: {
-    backgroundColor: '#E0E0E0',
+    backgroundColor: '#FFFFFF',
     borderRadius: 8,
-    paddingHorizontal: 12,
+    paddingHorizontal: 15,
     paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
   },
   viewSpecieText: {
-    fontSize: 12,
-    color: '#000',
+    fontSize: 11,
+    color: '#36454F',
     fontWeight: '500',
   },
   dropdown: {

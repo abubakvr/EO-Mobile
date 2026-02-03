@@ -298,33 +298,34 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 20,
+    paddingBottom: 16,
+    marginTop: 16,
     backgroundColor: '#F5F5F5',
   },
   headerLeft: {
     flex: 1,
   },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#000',
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#222222',
     marginBottom: 4,
   },
   breadcrumb: {
-    fontSize: 14,
+    fontSize: 10,
     color: '#666',
   },
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
+    marginTop: 4,
   },
   iconButton: {
     padding: 4,
   },
   signOutText: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#000',
     fontWeight: '500',
   },
@@ -336,18 +337,20 @@ const styles = StyleSheet.create({
     paddingBottom: 120, // Space for bottom navigation
   },
   taskCard: {
-    backgroundColor: '#E8EDE9', // Light green-grey
+    backgroundColor: '#FFFFFF', // Light green-grey
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    borderWidth: 1,
+    borderColor: '#D0E7D0',
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
       height: 1,
     },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.07,
     shadowRadius: 2,
     elevation: 2,
   },
@@ -357,25 +360,30 @@ const styles = StyleSheet.create({
   },
   taskHeader: {
     marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
   },
   taskId: {
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: 'bold',
     color: '#000',
-    marginBottom: 4,
   },
   taskName: {
-    fontSize: 18,
+    fontSize: 13,
     fontWeight: '600',
     color: '#000',
   },
   dueDate: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#666',
     marginBottom: 12,
   },
   taskInfo: {
+    marginTop: 4,
     gap: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   infoRow: {
     flexDirection: 'row',
@@ -383,12 +391,12 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   infoText: {
-    fontSize: 14,
+    fontSize: 10,
     color: '#666',
   },
   actionButton: {
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingVertical: 8,
     borderRadius: 8,
     minWidth: 100,
     alignItems: 'center',
@@ -398,10 +406,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#2E8B57',
   },
   growthCheckButton: {
-    backgroundColor: '#FF9800',
+    backgroundColor: '#D48D47',
   },
   actionButtonText: {
-    fontSize: 14,
+    fontSize: 10,
     fontWeight: '600',
   },
   validateButtonText: {

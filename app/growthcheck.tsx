@@ -2,9 +2,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { Asset } from 'expo-asset';
 import { File } from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Image,
   ScrollView,
@@ -18,17 +20,24 @@ import {
 import { LeafletView } from 'react-native-leaflet-view';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const MAP_LOCATION = {
+const DEFAULT_MAP_LOCATION = {
   latitude: 1.343434,
   longitude: 6.678545,
 };
 
 type Step = 1 | 2 | 3 | 4;
 
+type ViewMode = 'growthCheck' | 'incidentReport';
+
 export default function GrowthCheckScreen() {
   const router = useRouter();
+  const [viewMode, setViewMode] = useState<ViewMode>('growthCheck');
   const [currentStep, setCurrentStep] = useState<Step>(1);
   const [webViewContent, setWebViewContent] = useState<string | null>(null);
+  const [currentLocation, setCurrentLocation] = useState(DEFAULT_MAP_LOCATION);
+  const [locationAccuracy, setLocationAccuracy] = useState<string>('');
+  const [locationObject, setLocationObject] = useState<Location.LocationObject | null>(null);
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
 
   // Form state
   const [soilData, setSoilData] = useState({
@@ -41,7 +50,7 @@ export default function GrowthCheckScreen() {
   });
 
   const [physicalCondition, setPhysicalCondition] = useState({
-    brokenBrand: 'no' as 'yes' | 'no',
+    brokenBranch: 'no' as 'yes' | 'no',
     damagedBark: 'no' as 'yes' | 'no',
     bentStem: 'no' as 'yes' | 'no',
     rootsExposure: 'no' as 'yes' | 'no',
@@ -51,6 +60,14 @@ export default function GrowthCheckScreen() {
   const [leafImage, setLeafImage] = useState<string | null>(null);
   const [stemImage, setStemImage] = useState<string | null>(null);
   const [treeImage, setTreeImage] = useState<string | null>(null);
+
+  // Incident Report state
+  const [incidentData, setIncidentData] = useState({
+    damageDestroyed: 'no' as 'yes' | 'no',
+    missingTree: 'no' as 'yes' | 'no',
+    others: '',
+  });
+  const [incidentPhoto, setIncidentPhoto] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -83,7 +100,159 @@ export default function GrowthCheckScreen() {
     };
   }, []);
 
+  // Try to get location automatically on mount (optional - can be removed if not desired)
+  useEffect(() => {
+    const tryGetLocation = async () => {
+      try {
+        // Check if we already have permission
+        const { status } = await Location.getForegroundPermissionsAsync();
+        if (status === 'granted') {
+          // Silently try to get location without showing alerts
+          const enabled = await Location.hasServicesEnabledAsync();
+          if (enabled) {
+            try {
+              // Try with lowest accuracy first for faster response
+              const location = await Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.Lowest,
+              });
+              if (location?.coords && location.coords.latitude && location.coords.longitude) {
+                setCurrentLocation({
+                  latitude: location.coords.latitude,
+                  longitude: location.coords.longitude,
+                });
+                // Store location object and accuracy for display
+                setLocationObject(location);
+                if (location.coords.accuracy !== null && location.coords.accuracy !== undefined) {
+                  setLocationAccuracy(location.coords.accuracy.toString());
+                }
+              }
+            } catch (error: any) {
+              // Silently fail - user can manually request location
+              // Only log if it's not a common "unavailable" error
+              if (error.code !== 'UNAVAILABLE' && !error.message?.includes('unavailable')) {
+                console.log('Auto-location fetch failed:', error);
+              }
+            }
+          }
+        }
+      } catch (error) {
+        // Silently fail - user can manually request location
+        console.log('Auto-location permission check failed:', error);
+      }
+    };
+
+    // Small delay to let the screen render first
+    const timer = setTimeout(tryGetLocation, 1000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const getCurrentLocation = async () => {
+    try {
+      setIsGettingLocation(true);
+
+      // Request permissions
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permission Denied',
+          'Location permission is required to get the actual location. Please enable it in your device settings.',
+        );
+        setIsGettingLocation(false);
+        return;
+      }
+
+      // Check if location services are enabled
+      const enabled = await Location.hasServicesEnabledAsync();
+      if (!enabled) {
+        Alert.alert(
+          'Location Services Disabled',
+          'Please enable location services in your device settings.',
+        );
+        setIsGettingLocation(false);
+        return;
+      }
+
+      // Get current position with better options
+      // Try with lower accuracy first for faster response, then fallback to higher accuracy if needed
+      let location: Location.LocationObject;
+      
+      try {
+        // First try with lower accuracy for faster response
+        location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Low, // Lower accuracy is faster
+        });
+      } catch (error: any) {
+        // If low accuracy fails, try balanced accuracy
+        console.log('Low accuracy failed, trying balanced:', error);
+        try {
+          location = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          });
+        } catch (error2: any) {
+          // If balanced fails, try with any available accuracy
+          console.log('Balanced accuracy failed, trying lowest:', error2);
+          location = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Lowest,
+          });
+        }
+      }
+
+      // Validate location data
+      if (!location || !location.coords) {
+        throw new Error('Invalid location data received');
+      }
+
+      const newLocation = {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+      };
+
+      // Validate coordinates are valid numbers
+      if (
+        isNaN(newLocation.latitude) ||
+        isNaN(newLocation.longitude) ||
+        newLocation.latitude === 0 ||
+        newLocation.longitude === 0
+      ) {
+        throw new Error('Invalid coordinates received');
+      }
+
+      setCurrentLocation(newLocation);
+      // Store location object and accuracy for metadata
+      setLocationObject(location);
+      if (location.coords.accuracy) {
+        setLocationAccuracy(location.coords.accuracy.toString());
+      }
+      setIsGettingLocation(false);
+
+      Alert.alert('Success', 'Location updated successfully!');
+    } catch (error: any) {
+      console.error('Error getting location:', error);
+      
+      let errorMessage = 'Failed to get your location. Please try again.';
+      
+      if (error.code === 'TIMEOUT' || error.message?.includes('timeout')) {
+        errorMessage = 'Location request timed out. Please ensure you are in an area with good GPS signal and try again.';
+      } else if (error.code === 'UNAVAILABLE' || error.message?.includes('unavailable') || error.message?.includes('Make sure that location services are enabled')) {
+        errorMessage = 'Location services are currently unavailable. Please:\n\n1. Enable location services in your device settings\n2. Make sure GPS is enabled\n3. Try moving to an area with better GPS signal\n4. Wait a few seconds and try again';
+      } else if (error.code === 'PERMISSION_DENIED') {
+        errorMessage = 'Location permission was denied. Please enable location access in your device settings.';
+      } else if (error.message) {
+        errorMessage = `Error: ${error.message}`;
+      }
+      
+      Alert.alert(
+        'Location Error',
+        errorMessage + '\n\nTips:\n- Make sure location services are enabled\n- Try moving to an area with better GPS signal\n- Check that the app has location permissions',
+      );
+      setIsGettingLocation(false);
+    }
+  };
+
   const getBreadcrumb = () => {
+    if (viewMode === 'incidentReport') {
+      return 'Schedule/Report Incident';
+    }
     const steps = ['Home/Schedule', 'Growthcheck'];
     if (currentStep === 1) return steps.join('/');
     if (currentStep === 2) return steps.join('/') + '/Physical Condition';
@@ -102,6 +271,14 @@ export default function GrowthCheckScreen() {
     }
   };
 
+  const handleIncidentSubmit = () => {
+    // Submit incident report
+    console.log('Submitting incident report...', incidentData);
+    Alert.alert('Success', 'Incident report submitted successfully!', [
+      { text: 'OK', onPress: () => router.back() },
+    ]);
+  };
+
   const handlePrevious = () => {
     if (currentStep > 1) {
       setCurrentStep((prev) => (prev - 1) as Step);
@@ -110,7 +287,7 @@ export default function GrowthCheckScreen() {
     }
   };
 
-  const capturePhoto = async (type: 'leaf' | 'stem' | 'tree') => {
+  const capturePhoto = async (type: 'leaf' | 'stem' | 'tree' | 'incident') => {
     try {
       // Request camera permissions
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
@@ -137,6 +314,8 @@ export default function GrowthCheckScreen() {
           setStemImage(imageUri);
         } else if (type === 'tree') {
           setTreeImage(imageUri);
+        } else if (type === 'incident') {
+          setIncidentPhoto(imageUri);
         }
       }
     } catch (error) {
@@ -251,7 +430,7 @@ export default function GrowthCheckScreen() {
         </View>
       </View>
       <View style={styles.physicalForm}>
-        {renderToggleQuestion('Broken brand', 'brokenBrand')}
+        {renderToggleQuestion('Broken branch', 'brokenBranch')}
         {renderToggleQuestion('Damaged Bark', 'damagedBark')}
         {renderToggleQuestion('Bent Stem', 'bentStem')}
         {renderToggleQuestion('Roots Exposure', 'rootsExposure')}
@@ -389,8 +568,141 @@ export default function GrowthCheckScreen() {
     </View>
   );
 
+  const renderIncidentReport = () => (
+    <View style={styles.formSection}>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Report Incident</Text>
+        <Ionicons name="chevron-down" size={20} color="#000" />
+      </View>
+      <View style={styles.incidentForm}>
+        {/* Damage/Destroyed */}
+        <View style={styles.incidentQuestion}>
+          <Text style={styles.incidentLabel}>Damage/Destroyed</Text>
+          <View style={styles.toggleGroup}>
+            <TouchableOpacity
+              style={[
+                styles.toggleButton,
+                incidentData.damageDestroyed === 'yes'
+                  ? styles.toggleButtonYesSelected
+                  : styles.toggleButtonUnselected,
+              ]}
+              onPress={() => setIncidentData({ ...incidentData, damageDestroyed: 'yes' })}>
+              <Text
+                style={[
+                  styles.toggleButtonText,
+                  incidentData.damageDestroyed === 'yes'
+                    ? styles.toggleButtonTextSelected
+                    : styles.toggleButtonTextUnselected,
+                ]}>
+                Yes
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.toggleButton,
+                incidentData.damageDestroyed === 'no'
+                  ? styles.toggleButtonNoSelected
+                  : styles.toggleButtonUnselected,
+              ]}
+              onPress={() => setIncidentData({ ...incidentData, damageDestroyed: 'no' })}>
+              <Text
+                style={[
+                  styles.toggleButtonText,
+                  incidentData.damageDestroyed === 'no'
+                    ? styles.toggleButtonTextSelected
+                    : styles.toggleButtonTextUnselected,
+                ]}>
+                No
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Missing Tree */}
+        <View style={styles.incidentQuestion}>
+          <Text style={styles.incidentLabel}>Missing Tree</Text>
+          <View style={styles.toggleGroup}>
+            <TouchableOpacity
+              style={[
+                styles.toggleButton,
+                incidentData.missingTree === 'yes'
+                  ? styles.toggleButtonYesSelected
+                  : styles.toggleButtonUnselected,
+              ]}
+              onPress={() => setIncidentData({ ...incidentData, missingTree: 'yes' })}>
+              <Text
+                style={[
+                  styles.toggleButtonText,
+                  incidentData.missingTree === 'yes'
+                    ? styles.toggleButtonTextSelected
+                    : styles.toggleButtonTextUnselected,
+                ]}>
+                Yes
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.toggleButton,
+                incidentData.missingTree === 'no'
+                  ? styles.toggleButtonNoSelected
+                  : styles.toggleButtonUnselected,
+              ]}
+              onPress={() => setIncidentData({ ...incidentData, missingTree: 'no' })}>
+              <Text
+                style={[
+                  styles.toggleButtonText,
+                  incidentData.missingTree === 'no'
+                    ? styles.toggleButtonTextSelected
+                    : styles.toggleButtonTextUnselected,
+                ]}>
+                No
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Others */}
+        <View style={styles.incidentQuestion}>
+          <Text style={styles.incidentLabel}>others</Text>
+          <TextInput
+            style={styles.incidentOthersInput}
+            multiline
+            numberOfLines={4}
+            placeholder="Enter additional comments..."
+            value={incidentData.others}
+            onChangeText={(text) => setIncidentData({ ...incidentData, others: text })}
+            textAlignVertical="top"
+          />
+        </View>
+
+        {/* Capture Photo */}
+        <View style={styles.incidentQuestion}>
+          <Text style={styles.incidentLabel}>Capture Photo of Planting Site</Text>
+          <View style={styles.pictureContainer}>
+            {incidentPhoto ? (
+              <>
+                <Image source={{ uri: incidentPhoto }} style={styles.capturedImage} />
+                <TouchableOpacity
+                  style={[styles.captureButton, styles.retakeButton]}
+                  onPress={() => capturePhoto('incident')}>
+                  <Text style={styles.captureButtonText}>Retake Photo</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <TouchableOpacity
+                style={styles.captureButton}
+                onPress={() => capturePhoto('incident')}>
+                <Text style={styles.captureButtonText}>Capture</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <StatusBar barStyle="dark-content" backgroundColor="#F5F5F5" />
 
       {/* Header */}
@@ -399,9 +711,18 @@ export default function GrowthCheckScreen() {
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color="#000" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            {getBreadcrumb()}
-          </Text>
+          <View style={styles.headerTitleContainer}>
+            {viewMode === 'incidentReport' ? (
+              <>
+                <Text style={styles.headerTitle}>Schedule/</Text>
+                <Text style={[styles.headerTitle, styles.headerTitleHighlight]}>Report Incident</Text>
+              </>
+            ) : (
+              <Text style={styles.headerTitle} numberOfLines={1}>
+                {getBreadcrumb()}
+              </Text>
+            )}
+          </View>
         </View>
         <View style={styles.headerRight}>
           <TouchableOpacity style={styles.iconButton}>
@@ -428,16 +749,16 @@ export default function GrowthCheckScreen() {
               <LeafletView
                 source={{ html: webViewContent }}
                 mapCenterPosition={{
-                  lat: MAP_LOCATION.latitude,
-                  lng: MAP_LOCATION.longitude,
+                  lat: currentLocation.latitude,
+                  lng: currentLocation.longitude,
                 }}
                 zoom={15}
                 mapMarkers={[
                   {
                     id: '1',
                     position: {
-                      lat: MAP_LOCATION.latitude,
-                      lng: MAP_LOCATION.longitude,
+                      lat: currentLocation.latitude,
+                      lng: currentLocation.longitude,
                     },
                     icon: '📍',
                     size: [40, 40],
@@ -446,38 +767,76 @@ export default function GrowthCheckScreen() {
                 zoomControl={true}
                 attributionControl={true}
                 doDebug={false}
+                key={`${currentLocation.latitude}-${currentLocation.longitude}`}
               />
             </View>
           )}
         </View>
 
-        {/* Location Information Card */}
-        <View style={styles.locationCard}>
-          <View style={styles.locationLeft}>
-            <Ionicons name="locate" size={24} color="#000" />
-            <View style={styles.coordinatesContainer}>
-              <Text style={styles.coordinatesValue}>
-                {MAP_LOCATION.latitude}, {MAP_LOCATION.longitude}
-              </Text>
-              <Text style={styles.precisionText}>Precision: 15m - Altitude 123m</Text>
-            </View>
-          </View>
-          <View style={styles.locationRight}>
-            <Ionicons name="checkmark-circle" size={28} color="#2E8B57" />
+        {/* Get Location Button and Coordinates */}
+        <View style={styles.locationSection}>
+          <TouchableOpacity
+            style={[styles.validateLocationButton, isGettingLocation && styles.buttonDisabled]}
+            onPress={getCurrentLocation}
+            disabled={isGettingLocation}>
+            {isGettingLocation ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Text style={styles.validateLocationText}>Get Current Location</Text>
+            )}
+          </TouchableOpacity>
+          <View style={styles.coordinatesContainer}>
+            <Text style={styles.coordinatesLabel}>Coordinates</Text>
+            <Text style={styles.coordinatesValue}>
+              {currentLocation.latitude.toFixed(6)}, {currentLocation.longitude.toFixed(6)}
+            </Text>
           </View>
         </View>
-        {currentStep === 2 && (
-          <View style={styles.reportIncidentContainer}>
-            <TouchableOpacity style={styles.reportIncidentButton}>
-              <Text style={styles.reportIncidentText}>Report Incident</Text>
-            </TouchableOpacity>
-          </View>
-        )}
 
+        {/* Location Information Card with Toggle */}
+        <View style={styles.locationCardContainer}>
+          <View style={styles.locationCard}>
+            <View style={styles.locationLeft}>
+              {/* <Ionicons name="locate" size={24} color="#000" /> */}
+              <View style={styles.locationCoordinatesContainer}>
+                <Text style={styles.locationCoordinatesValue}>
+                  {currentLocation.latitude.toFixed(6)}, {currentLocation.longitude.toFixed(6)}
+                </Text>
+                <Text style={styles.precisionText}>
+                  {locationObject?.coords?.accuracy !== null && locationObject?.coords?.accuracy !== undefined
+                    ? `Precision: ${locationObject.coords.accuracy.toFixed(0)}m`
+                    : locationAccuracy
+                      ? `Precision: ${parseFloat(locationAccuracy).toFixed(0)}m`
+                      : 'Precision: N/A'}
+                  {locationObject?.coords?.altitude !== null && locationObject?.coords?.altitude !== undefined
+                    ? ` - Altitude ${locationObject.coords.altitude.toFixed(0)}m`
+                    : ''}
+                </Text>
+              </View>
+            </View>
+            {/* <View style={styles.locationRight}>
+              <Ionicons name="checkmark-circle" size={28} color="#2E8B57" />
+            </View> */}
+          </View>
+          <TouchableOpacity
+            style={[
+              styles.viewToggleButton,
+              viewMode === 'incidentReport' && styles.viewToggleButtonActive,
+            ]}
+            onPress={() => setViewMode(viewMode === 'growthCheck' ? 'incidentReport' : 'growthCheck')}>
+            <Text
+              style={[
+                styles.viewToggleButtonText,
+                viewMode === 'incidentReport' && styles.viewToggleButtonTextActive,
+              ]}>
+              {viewMode === 'growthCheck' ? 'Report Incident' : 'Growth Check'}
+            </Text>
+          </TouchableOpacity>
+        </View>
         {/* Tree Information */}
         <View style={styles.treeInfoSection}>
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Tree specie:</Text>
+            <Text style={styles.infoLabel}>Tree Name:</Text>
             <Text style={styles.infoValue}>Moringa</Text>
           </View>
           <View style={styles.infoRow}>
@@ -494,18 +853,34 @@ export default function GrowthCheckScreen() {
           </View>
         </View>
 
-        {/* Step Content */}
-        {renderStepContent()}
+        {/* Conditional Content Based on View Mode */}
+        {viewMode === 'growthCheck' ? (
+          <>{renderStepContent()}</>
+        ) : (
+          <>{renderIncidentReport()}</>
+        )}
       </ScrollView>
 
       {/* Bottom Navigation Buttons */}
       <View style={styles.bottomButtons}>
-        <TouchableOpacity style={styles.previousButton} onPress={handlePrevious}>
-          <Text style={styles.previousButtonText}>Previous</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
-          <Text style={styles.nextButtonText}>{currentStep === 4 ? 'Submit' : 'Next'}</Text>
-        </TouchableOpacity>
+        {viewMode === 'growthCheck' ? (
+          <>
+            {currentStep > 1 && (
+              <TouchableOpacity style={styles.previousButton} onPress={handlePrevious}>
+                <Text style={styles.previousButtonText}>Previous</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity 
+              style={[styles.nextButton, currentStep === 1 && styles.nextButtonFullWidth]} 
+              onPress={handleNext}>
+              <Text style={styles.nextButtonText}>{currentStep === 4 ? 'Submit' : 'Next'}</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <TouchableOpacity style={styles.submitButton} onPress={handleIncidentSubmit}>
+            <Text style={styles.submitButtonText}>Submit</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -521,7 +896,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingVertical: 20,
     backgroundColor: '#F5F5F5',
   },
   headerLeft: {
@@ -539,11 +914,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 12,
   },
+  headerTitleContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   headerTitle: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '500',
     color: '#000',
-    flex: 1,
+  },
+  headerTitleHighlight: {
+    color: '#F44336',
   },
   headerRight: {
     flexDirection: 'row',
@@ -554,7 +936,7 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   signOutText: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#000',
     fontWeight: '500',
   },
@@ -570,6 +952,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginBottom: 16,
     backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#6B7280',
   },
   map: {
     width: '100%',
@@ -584,11 +968,80 @@ const styles = StyleSheet.create({
     color: '#666',
     fontSize: 14,
   },
+  locationSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    gap: 12,
+  },
+  validateLocationButton: {
+    backgroundColor: '#4A4A4A',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    flex: 1,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  buttonDisabled: {
+    opacity: 0.7,
+  },
+  validateLocationText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  coordinatesContainer: {
+    flex: 1,
+    alignItems: 'flex-end',
+  },
+  locationCardContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 20,
+  },
+  viewToggleButton: {
+    backgroundColor: '#AA1F21',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    minWidth: 130,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'stretch',
+  },
+  viewToggleButtonActive: {
+    backgroundColor: '#F44336',
+    borderColor: '#F44336',
+  },
+  viewToggleButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  viewToggleButtonTextActive: {
+    color: '#FFFFFF',
+  },
+  coordinatesLabel: {
+    fontSize: 12,
+    color: '#000',
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  coordinatesValue: {
+    fontSize: 11,
+    color: '#666',
+  },
   locationCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 20,
+    flex: 1,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -608,27 +1061,27 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   reportIncidentButton: {
-    backgroundColor: '#F44336',
+    backgroundColor: '#AA1F21',
     borderRadius: 8,
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingVertical: 10,
   },
   reportIncidentText: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
   },
-  coordinatesContainer: {
+  locationCoordinatesContainer: {
     flex: 1,
   },
-  coordinatesValue: {
-    fontSize: 18,
+  locationCoordinatesValue: {
+    fontSize: 10,
     fontWeight: 'bold',
     color: '#000',
     marginBottom: 4,
   },
   precisionText: {
-    fontSize: 12,
+    fontSize: 8,
     color: '#666',
   },
   treeInfoSection: {
@@ -867,10 +1320,52 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  nextButtonFullWidth: {
+    flex: 1,
+  },
   nextButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  submitButton: {
+    flex: 1,
+    backgroundColor: '#2E8B57',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  submitButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  incidentForm: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    gap: 20,
+  },
+  incidentQuestion: {
+    gap: 12,
+  },
+  incidentLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#000',
+    marginBottom: 8,
+  },
+  incidentOthersInput: {
+    backgroundColor: '#F5F5F5',
+    borderRadius: 8,
+    padding: 16,
+    fontSize: 14,
+    color: '#000',
+    minHeight: 100,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    textAlignVertical: 'top',
   },
 });
 
