@@ -43,6 +43,7 @@ export default function TreeListScreen() {
     custodianName: getStringParam(params.custodianName),
     custodianPhone: getStringParam(params.custodianPhone),
     custodianId: getStringParam(params.custodianId),
+    returnPath: getStringParam(params.returnPath, '/validate'),
   };
 
   return (
@@ -113,7 +114,7 @@ export default function TreeListScreen() {
                       specieName: specie.common_name,
                       scientificName: specie.scientific_name,
                       specieCode: specie.code,
-                      // Preserve task data
+                      // Preserve task data and return path
                       ...preservedParams,
                     },
                   });

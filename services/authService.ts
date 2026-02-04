@@ -48,6 +48,21 @@ export const authService = {
         console.warn('⚠️ No access_token received in login response');
       }
 
+      // Save user data (name and ward) to secure storage
+      if (loginData.user) {
+        const userName = loginData.user.full_name || '';
+        // For now, use ward_ids. If ward_name is available in the future, use that instead
+        // ward_ids is a string (possibly comma-separated IDs), we'll use it as-is for now
+        const userWard = loginData.user.ward_ids || '';
+        
+        if (userName) {
+          await tokenStorage.saveUserData(userName, userWard);
+          if (__DEV__) {
+            console.log('✅ User data saved to secure storage:', { userName, userWard });
+          }
+        }
+      }
+
       return loginData;
     } catch (error: any) {
       if (error instanceof ApiError) {

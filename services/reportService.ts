@@ -51,14 +51,34 @@ export const reportService = {
       // The API returns the response wrapped in a data object
       // Structure: { data: { data: Report, status: 200 } }
       const axiosInstance = apiClient.getInstance();
-      const response = await axiosInstance.get<{ data: { data: Report; status: number } }>(url);
+      const response = await axiosInstance.get(url);
 
       // Handle nested data structure: response.data.data.data
+      // The API response structure is: { data: { data: Report, status: 200 } }
       const responseData = response.data;
-      if (responseData?.data?.data) {
-        return responseData.data.data;
+      
+      if (__DEV__) {
+        console.log('[ReportService] getReportById response structure:', {
+          hasData: !!responseData,
+          hasDataData: !!responseData?.data,
+          hasDataDataData: !!responseData?.data?.data,
+          responseDataKeys: responseData ? Object.keys(responseData) : [],
+        });
       }
-      throw new ApiError('Invalid response structure from API');
+
+      // Try different possible response structures
+      if (responseData?.data?.data) {
+        // Structure: { data: { data: Report, status: 200 } }
+        return responseData.data.data;
+      } else if (responseData?.data) {
+        // Structure: { data: Report }
+        return responseData.data;
+      } else if (responseData) {
+        // Structure: Report (direct)
+        return responseData;
+      }
+      
+      throw new ApiError('Invalid response structure from API: No data found');
     } catch (error: any) {
       if (error instanceof ApiError) {
         throw error;

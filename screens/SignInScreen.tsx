@@ -1,7 +1,8 @@
+import { useAuth } from '@/hooks/useAuth';
+import { ApiError } from '@/services/apiClient';
 import React, { useState } from 'react';
-import { useRouter } from 'expo-router';
 import {
-  Alert,
+  ActivityIndicator,
   ImageBackground,
   KeyboardAvoidingView,
   Platform,
@@ -10,17 +11,13 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View,
-  ActivityIndicator,
+  View
 } from 'react-native';
-import { useAuth } from '@/hooks/useAuth';
-import { ApiError } from '@/services/apiClient';
 
 const HEADER_IMAGE =
   'https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=800&q=80';
 
 const SignInScreen = () => {
-  const router = useRouter();
   const { login, isLoggingIn, loginError } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -138,13 +135,6 @@ const SignInScreen = () => {
               </View>
               <TouchableOpacity>
                 <Text style={styles.linkText}>Forget Password?</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.footerRow}>
-              <Text style={styles.footerText}>Don&apos;t have an account? </Text>
-              <TouchableOpacity onPress={() => router.push('/signup')}>
-                <Text style={[styles.footerText, styles.footerLinkText]}>Sign Up</Text>
               </TouchableOpacity>
             </View>
           </View>

@@ -2,6 +2,8 @@ import * as SecureStore from 'expo-secure-store';
 
 const ACCESS_TOKEN_KEY = 'access_token';
 const REFRESH_TOKEN_KEY = 'refresh_token';
+const USER_NAME_KEY = 'user_name';
+const USER_WARD_KEY = 'user_ward';
 
 /**
  * Token storage utility using Expo SecureStore
@@ -69,13 +71,73 @@ export const tokenStorage = {
   },
 
   /**
-   * Clear all tokens
+   * Save user name
+   */
+  async saveUserName(name: string): Promise<void> {
+    try {
+      await SecureStore.setItemAsync(USER_NAME_KEY, name);
+    } catch (error) {
+      console.error('Failed to save user name:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get user name
+   */
+  async getUserName(): Promise<string | null> {
+    try {
+      return await SecureStore.getItemAsync(USER_NAME_KEY);
+    } catch (error) {
+      console.warn('Failed to get user name from SecureStore:', error);
+      return null;
+    }
+  },
+
+  /**
+   * Save user ward
+   */
+  async saveUserWard(ward: string): Promise<void> {
+    try {
+      await SecureStore.setItemAsync(USER_WARD_KEY, ward);
+    } catch (error) {
+      console.error('Failed to save user ward:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get user ward
+   */
+  async getUserWard(): Promise<string | null> {
+    try {
+      return await SecureStore.getItemAsync(USER_WARD_KEY);
+    } catch (error) {
+      console.warn('Failed to get user ward from SecureStore:', error);
+      return null;
+    }
+  },
+
+  /**
+   * Save user data (name and ward)
+   */
+  async saveUserData(name: string, ward: string): Promise<void> {
+    await Promise.all([
+      this.saveUserName(name),
+      this.saveUserWard(ward),
+    ]);
+  },
+
+  /**
+   * Clear all tokens and user data
    */
   async clearTokens(): Promise<void> {
     try {
       await Promise.all([
         SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY),
         SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY),
+        SecureStore.deleteItemAsync(USER_NAME_KEY),
+        SecureStore.deleteItemAsync(USER_WARD_KEY),
       ]);
     } catch (error) {
       console.error('Failed to clear tokens:', error);

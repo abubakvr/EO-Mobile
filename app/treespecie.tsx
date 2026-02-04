@@ -96,6 +96,7 @@ export default function TreeSpecieScreen() {
     custodianName: getStringParam(params.custodianName),
     custodianPhone: getStringParam(params.custodianPhone),
     custodianId: getStringParam(params.custodianId),
+    returnPath: getStringParam(params.returnPath, '/validate'),
   };
 
   // Get initial specie ID from params, default to 1
@@ -125,13 +126,17 @@ export default function TreeSpecieScreen() {
   };
 
   const handleSelectSpecie = () => {
-    // Navigate back to validate page with selected specie and preserved task data
+    // Get return path from params, default to /validate
+    const returnPath = getStringParam(params.returnPath, '/validate');
+    
+    // Navigate back to the appropriate page with selected specie and preserved data
     router.push({
-      pathname: '/validate',
+      pathname: returnPath as any,
       params: {
         selectedSpecie: currentSpecie.name,
-        // Preserve all task data
+        // Preserve all task data and custodian data, update speciesId
         ...preservedParams,
+        speciesId: currentSpecie.id.toString(),
       },
     });
   };

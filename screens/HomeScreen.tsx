@@ -1,10 +1,13 @@
 import { useAuth } from '@/hooks/useAuth';
 import { useTasksCount } from '@/hooks/useTasks';
+import { useTrees } from '@/hooks/useTrees';
+import { tokenStorage } from '@/services/tokenStorage';
+import type { Tree } from '@/types/tree';
 import { Ionicons } from '@expo/vector-icons';
 import { Asset } from "expo-asset";
 import { File } from 'expo-file-system';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { LeafletView } from 'react-native-leaflet-view';
 
@@ -18,6 +21,9 @@ const HomeScreen = () => {
   const [webViewContent, setWebViewContent] = useState<string | null>(null);
   const { total: tasksCount, isLoading: isLoadingTasks } = useTasksCount();
   const { logout } = useAuth();
+  const [userName, setUserName] = useState<string>('');
+  const [userWard, setUserWard] = useState<string>('');
+  const { data: treesData, isLoading: isLoadingTrees } = useTrees({ page_size: 100 });
 
   useEffect(() => {
     let isMounted = true;
@@ -39,7 +45,6 @@ const HomeScreen = () => {
           setWebViewContent(htmlContent);
         }
       } catch (error) {
-        console.error('Error loading HTML:', error);
         Alert.alert('Error loading HTML', JSON.stringify(error));
       }
     };
@@ -50,6 +55,91 @@ const HomeScreen = () => {
       isMounted = false;
     };
   }, []);
+
+  // Load user data from secure storage
+  useEffect(() => {
+    const loadUserData = async () => {
+      try {
+        const [name, ward] = await Promise.all([
+          tokenStorage.getUserName(),
+          tokenStorage.getUserWard(),
+        ]);
+        
+        if (name) {
+          setUserName(name);
+        }
+        if (ward) {
+          setUserWard(ward);
+        }
+      } catch (error) {
+        // Silently handle error
+      }
+    };
+
+    loadUserData();
+  }, []);
+
+  // Create markers from trees data
+  const mapMarkers = useMemo(() => {
+    const markers: Array<{
+      id: string;
+      position: { lat: number; lng: number };
+      icon: string;
+      size: [number, number];
+    }> = [];
+
+    if (treesData?.data && Array.isArray(treesData.data)) {
+      treesData.data.forEach((tree: Tree) => {
+        if (tree.location && typeof tree.location === 'object') {
+          const lat = tree.location.latitude;
+          const lng = tree.location.longitude;
+          
+          if (lat != null && lng != null && !isNaN(lat) && !isNaN(lng)) {
+            markers.push({
+              id: `tree-${tree.id}`,
+              position: {
+                lat: lat,
+                lng: lng,
+              },
+              icon: '🌲',
+              size: [40, 40],
+            });
+          }
+        }
+      });
+    }
+
+    // If no tree markers, add default marker
+    if (markers.length === 0) {
+      markers.push({
+        id: 'default',
+        position: {
+          lat: DEFAULT_LOCATION.latitude,
+          lng: DEFAULT_LOCATION.longitude,
+        },
+        icon: '📍',
+        size: [32, 32],
+      });
+    }
+
+    return markers;
+  }, [treesData]);
+
+  // Calculate map center based on trees or use default
+  const mapCenter = useMemo(() => {
+    if (mapMarkers.length > 0 && mapMarkers[0].id !== 'default') {
+      // Use the first tree's location as center, or calculate average
+      const firstMarker = mapMarkers[0];
+      return {
+        lat: firstMarker.position.lat,
+        lng: firstMarker.position.lng,
+      };
+    }
+    return {
+      lat: DEFAULT_LOCATION.latitude,
+      lng: DEFAULT_LOCATION.longitude,
+    };
+  }, [mapMarkers]);
 
   return (
     <View style={styles.root}>
@@ -79,15 +169,15 @@ const HomeScreen = () => {
               style={styles.avatar}
             />
             <View>
-              <Text style={styles.profileName}>Abubakar Ladan</Text>
-              <Text style={styles.profileSubtitle}>Wunlan Ward</Text>
+              <Text style={styles.profileName}>{userName || 'Loading...'}</Text>
+              {userWard && <Text style={styles.profileSubtitle}>{userWard}</Text>}
             </View>
           </View>
 
           <View style={styles.actionsColumn}>
             <TouchableOpacity
               style={styles.primaryChip}
-              onPress={() => router.push('/validate')}>
+              onPress={() => router.push('/register')}>
               <Text style={styles.primaryChipText}>Register a Tree</Text>
             </TouchableOpacity>
           </View>
@@ -112,28 +202,13 @@ const HomeScreen = () => {
             <View style={styles.mapImage}>
               <LeafletView
                 source={{ html: webViewContent }}
-                mapCenterPosition={{
-                  lat: DEFAULT_LOCATION.latitude,
-                  lng: DEFAULT_LOCATION.longitude,
-                }}
+                mapCenterPosition={mapCenter}
                 zoom={13}
-                mapMarkers={[
-                  {
-                    id: '1',
-                    position: {
-                      lat: DEFAULT_LOCATION.latitude,
-                      lng: DEFAULT_LOCATION.longitude,
-                    },
-                    icon: '📍',
-                    size: [32, 32],
-                  },
-                ]}
+                mapMarkers={mapMarkers}
                 zoomControl={true}
                 attributionControl={true}
                 doDebug={false}
-                onError={(error) => {
-                  Alert.alert('Map Error', JSON.stringify(error));
-                }}
+                key={`map-${mapMarkers.length}-${mapCenter.lat}-${mapCenter.lng}`}
               />
             </View>
           )}
@@ -172,7 +247,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 16,
-    marginTop: 16,
+    marginTop: 58,
   },
   headerTitle: {
     fontSize: 24,
@@ -268,6 +343,9 @@ const styles = StyleSheet.create({
   mapImage: {
     width: '100%',
     height: 360,
+    borderWidth: 1,
+    borderColor: '#6B7280',
+
   },
   loadingContainer: {
     justifyContent: 'center',

@@ -1,3 +1,4 @@
+import SuccessScreen from '@/components/SuccessScreen';
 import { Ionicons } from '@expo/vector-icons';
 import { Asset } from 'expo-asset';
 import { File } from 'expo-file-system';
@@ -68,6 +69,8 @@ export default function GrowthCheckScreen() {
     others: '',
   });
   const [incidentPhoto, setIncidentPhoto] = useState<string | null>(null);
+  const [showSuccessScreen, setShowSuccessScreen] = useState(false);
+  const [successTaskName, setSuccessTaskName] = useState('');
 
   useEffect(() => {
     let isMounted = true;
@@ -267,16 +270,16 @@ export default function GrowthCheckScreen() {
     } else {
       // Submit form
       console.log('Submitting growth check data...');
-      router.back();
+      setSuccessTaskName('Growth Check');
+      setShowSuccessScreen(true);
     }
   };
 
   const handleIncidentSubmit = () => {
     // Submit incident report
     console.log('Submitting incident report...', incidentData);
-    Alert.alert('Success', 'Incident report submitted successfully!', [
-      { text: 'OK', onPress: () => router.back() },
-    ]);
+    setSuccessTaskName('Report Incident');
+    setShowSuccessScreen(true);
   };
 
   const handlePrevious = () => {
@@ -346,8 +349,8 @@ export default function GrowthCheckScreen() {
         <Ionicons name="chevron-down" size={20} color="#000" />
       </View>
       <View style={styles.soilForm}>
-        <View style={styles.inputRow}>
-          <Text style={styles.inputLabel}>Soil Fertility</Text>
+        <View style={styles.gridRow}>
+          <Text style={styles.gridLabel}>Soil Fertility</Text>
           <View style={styles.inputContainer}>
             <TextInput
               style={styles.input}
@@ -358,8 +361,8 @@ export default function GrowthCheckScreen() {
             <Text style={styles.inputUnit}>mg/kg</Text>
           </View>
         </View>
-        <View style={styles.inputRow}>
-          <Text style={styles.inputLabel}>Moisture Content</Text>
+        <View style={styles.gridRow}>
+          <Text style={styles.gridLabel}>Moisture Content</Text>
           <View style={styles.inputContainer}>
             <TextInput
               style={styles.input}
@@ -370,8 +373,8 @@ export default function GrowthCheckScreen() {
             <Text style={styles.inputUnit}>%</Text>
           </View>
         </View>
-        <View style={styles.inputRow}>
-          <Text style={styles.inputLabel}>PH Value</Text>
+        <View style={styles.gridRow}>
+          <Text style={styles.gridLabel}>PH Value</Text>
           <View style={styles.inputContainer}>
             <TextInput
               style={styles.input}
@@ -381,8 +384,8 @@ export default function GrowthCheckScreen() {
             />
           </View>
         </View>
-        <View style={styles.inputRow}>
-          <Text style={styles.inputLabel}>Temperature</Text>
+        <View style={styles.gridRow}>
+          <Text style={styles.gridLabel}>Temperature</Text>
           <View style={styles.inputContainer}>
             <TextInput
               style={styles.input}
@@ -393,8 +396,8 @@ export default function GrowthCheckScreen() {
             <Text style={styles.inputUnit}>°C</Text>
           </View>
         </View>
-        <View style={styles.inputRow}>
-          <Text style={styles.inputLabel}>Sunlight</Text>
+        <View style={styles.gridRow}>
+          <Text style={styles.gridLabel}>Sunlight</Text>
           <View style={styles.inputContainer}>
             <TextInput
               style={styles.input}
@@ -405,8 +408,8 @@ export default function GrowthCheckScreen() {
             <Text style={styles.inputUnit}>lux</Text>
           </View>
         </View>
-        <View style={styles.inputRow}>
-          <Text style={styles.inputLabel}>Humidity</Text>
+        <View style={styles.gridRow}>
+          <Text style={styles.gridLabel}>Humidity</Text>
           <View style={styles.inputContainer}>
             <TextInput
               style={styles.input}
@@ -439,8 +442,8 @@ export default function GrowthCheckScreen() {
   );
 
   const renderToggleQuestion = (label: string, key: keyof typeof physicalCondition) => (
-    <View style={styles.toggleQuestion} key={key}>
-      <Text style={styles.toggleLabel}>{label}</Text>
+    <View style={styles.gridRow} key={key}>
+      <Text style={styles.gridLabel}>{label}</Text>
       <View style={styles.toggleGroup}>
         <TouchableOpacity
           style={[
@@ -576,8 +579,8 @@ export default function GrowthCheckScreen() {
       </View>
       <View style={styles.incidentForm}>
         {/* Damage/Destroyed */}
-        <View style={styles.incidentQuestion}>
-          <Text style={styles.incidentLabel}>Damage/Destroyed</Text>
+        <View style={styles.gridRow}>
+          <Text style={styles.gridLabel}>Damage/Destroyed</Text>
           <View style={styles.toggleGroup}>
             <TouchableOpacity
               style={[
@@ -619,8 +622,8 @@ export default function GrowthCheckScreen() {
         </View>
 
         {/* Missing Tree */}
-        <View style={styles.incidentQuestion}>
-          <Text style={styles.incidentLabel}>Missing Tree</Text>
+        <View style={styles.gridRow}>
+          <Text style={styles.gridLabel}>Missing Tree</Text>
           <View style={styles.toggleGroup}>
             <TouchableOpacity
               style={[
@@ -662,8 +665,8 @@ export default function GrowthCheckScreen() {
         </View>
 
         {/* Others */}
-        <View style={styles.incidentQuestion}>
-          <Text style={styles.incidentLabel}>others</Text>
+        <View style={styles.gridColumn}>
+          <Text style={styles.gridLabel}>Others</Text>
           <TextInput
             style={styles.incidentOthersInput}
             multiline
@@ -700,6 +703,20 @@ export default function GrowthCheckScreen() {
       </View>
     </View>
   );
+
+  // Show success screen if task was submitted
+  if (showSuccessScreen) {
+    return (
+      <SuccessScreen
+        taskName={successTaskName}
+        message="Has Successfully been sent!"
+        onDone={() => {
+          setShowSuccessScreen(false);
+          router.back();
+        }}
+      />
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -989,7 +1006,7 @@ const styles = StyleSheet.create({
   },
   validateLocationText: {
     color: '#FFFFFF',
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '500',
     textAlign: 'center',
   },
@@ -1107,6 +1124,11 @@ const styles = StyleSheet.create({
   },
   formSection: {
     marginBottom: 20,
+    backgroundColor: '#D9D9D9',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -1125,16 +1147,33 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   soilForm: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#D9D9D9',
     borderRadius: 12,
-    padding: 16,
     gap: 16,
   },
   inputRow: {
     gap: 8,
   },
+  gridColumn: {
+    flexDirection: 'column',
+    gap: 12,
+  },
+  gridRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 12,
+  },
+  gridLabel: {
+    fontSize: 13,
+    fontWeight: '400',
+    color: '#000',
+    flex: 1,
+    minWidth: 120,
+  },
   inputLabel: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
     color: '#000',
     marginBottom: 4,
@@ -1147,6 +1186,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E0E0E0',
     paddingHorizontal: 12,
+    flex: 1,
+    minWidth: 150,
   },
   input: {
     flex: 1,
@@ -1160,9 +1201,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   physicalForm: {
-    backgroundColor: '#F0F0F0',
     borderRadius: 12,
-    padding: 16,
     gap: 20,
   },
   toggleQuestion: {
@@ -1177,6 +1216,8 @@ const styles = StyleSheet.create({
   toggleGroup: {
     flexDirection: 'row',
     gap: 12,
+    flex: 1,
+    minWidth: 150,
   },
   toggleButton: {
     flex: 1,
@@ -1192,12 +1233,10 @@ const styles = StyleSheet.create({
     borderColor: '#E0E0E0',
   },
   toggleButtonYesSelected: {
-    backgroundColor: '#F44336',
-    borderColor: '#F44336',
+    backgroundColor: '#AA1F21',
   },
   toggleButtonNoSelected: {
     backgroundColor: '#2E8B57',
-    borderColor: '#2E8B57',
   },
   toggleButtonText: {
     fontSize: 14,
@@ -1342,7 +1381,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   incidentForm: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 16,
     gap: 20,
@@ -1366,6 +1404,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E0E0E0',
     textAlignVertical: 'top',
+    flex: 1,
+    minWidth: 150,
   },
 });
 
