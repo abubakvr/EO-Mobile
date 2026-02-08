@@ -159,4 +159,140 @@ export const reportService = {
       throw new ApiError(error.message || 'Failed to validate tree. Please try again.');
     }
   },
+
+  /**
+   * Submit growth stage report
+   * POST /api/reports/growth-stage
+   * Uses fetch API for FormData in React Native to avoid axios FormData issues
+   */
+  async submitGrowthStage(formData: FormData): Promise<{ message: string }> {
+    try {
+      if (__DEV__) {
+        console.log('[ReportService] Submitting growth stage with FormData');
+      }
+
+      // Get base URL and auth token
+      const baseURL = apiClient.getInstance().defaults.baseURL || 'https://dev.greenlegacy.ng';
+      const accessToken = await tokenStorage.getAccessToken();
+
+      // Use fetch API for FormData - React Native's fetch handles FormData correctly
+      const url = `${baseURL}/api/reports/growth-stage`;
+      
+      const headers: HeadersInit = {
+        Accept: 'application/json',
+        // DO NOT set Content-Type - fetch will set it automatically with boundary for FormData
+      };
+
+      // Add Authorization header if token exists
+      if (accessToken) {
+        headers.Authorization = `Bearer ${accessToken}`;
+      }
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const message = errorData.message || `Request failed with status ${response.status}`;
+        throw new ApiError(message, response.status, errorData);
+      }
+
+      const data = await response.json();
+
+      if (__DEV__) {
+        console.log('[ReportService] Growth stage response:', data);
+      }
+
+      return data;
+    } catch (error: any) {
+      if (__DEV__) {
+        console.error('[ReportService] Growth stage error:', {
+          message: error.message,
+          status: error.statusCode,
+        });
+      }
+
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      
+      // Handle network errors
+      if (error.message?.includes('Network request failed') || error.message?.includes('Failed to fetch')) {
+        throw new ApiError('Network error. Please check your connection.', 0);
+      }
+      
+      throw new ApiError(error.message || 'Failed to submit growth stage. Please try again.');
+    }
+  },
+
+  /**
+   * Submit incident report
+   * POST /api/reports/incident
+   * Uses fetch API for FormData in React Native to avoid axios FormData issues
+   */
+  async submitIncident(formData: FormData): Promise<{ message: string }> {
+    try {
+      if (__DEV__) {
+        console.log('[ReportService] Submitting incident report with FormData');
+      }
+
+      // Get base URL and auth token
+      const baseURL = apiClient.getInstance().defaults.baseURL || 'https://dev.greenlegacy.ng';
+      const accessToken = await tokenStorage.getAccessToken();
+
+      // Use fetch API for FormData - React Native's fetch handles FormData correctly
+      const url = `${baseURL}/api/reports/incident`;
+      
+      const headers: HeadersInit = {
+        Accept: 'application/json',
+        // DO NOT set Content-Type - fetch will set it automatically with boundary for FormData
+      };
+
+      // Add Authorization header if token exists
+      if (accessToken) {
+        headers.Authorization = `Bearer ${accessToken}`;
+      }
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const message = errorData.message || `Request failed with status ${response.status}`;
+        throw new ApiError(message, response.status, errorData);
+      }
+
+      const data = await response.json();
+
+      if (__DEV__) {
+        console.log('[ReportService] Incident report response:', data);
+      }
+
+      return data;
+    } catch (error: any) {
+      if (__DEV__) {
+        console.error('[ReportService] Incident report error:', {
+          message: error.message,
+          status: error.statusCode,
+        });
+      }
+
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      
+      // Handle network errors
+      if (error.message?.includes('Network request failed') || error.message?.includes('Failed to fetch')) {
+        throw new ApiError('Network error. Please check your connection.', 0);
+      }
+      
+      throw new ApiError(error.message || 'Failed to submit incident report. Please try again.');
+    }
+  },
 };

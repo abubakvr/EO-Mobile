@@ -1,3 +1,4 @@
+import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useReports } from '@/hooks/useReports';
 import type { Report } from '@/types/report';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,6 +21,7 @@ export default function ReportsScreen() {
   const router = useRouter();
   const scrollViewRef = useRef<ScrollView>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const { isOnline } = useNetworkStatus();
   const { data, isLoading, error, refetch, isRefetching } = useReports({
     page: currentPage,
     page_size: DEFAULT_PAGE_SIZE,
@@ -133,6 +135,8 @@ export default function ReportsScreen() {
           <TouchableOpacity style={styles.iconButton}>
             <Ionicons name="notifications-outline" size={24} color="#000" />
           </TouchableOpacity>
+          {/* Network Status Indicator */}
+          <View style={[styles.networkIndicator, isOnline ? styles.networkIndicatorOnline : styles.networkIndicatorOffline]} />
           <TouchableOpacity>
             <Text style={styles.signOutText}>Sign Out</Text>
           </TouchableOpacity>
@@ -374,6 +378,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#000',
     fontWeight: '500',
+  },
+  networkIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginHorizontal: 8,
+  },
+  networkIndicatorOnline: {
+    backgroundColor: '#2E8B57',
+  },
+  networkIndicatorOffline: {
+    backgroundColor: '#F44336',
   },
   scrollView: {
     flex: 1,

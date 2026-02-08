@@ -1,8 +1,14 @@
 import { useAuth } from '@/hooks/useAuth';
+import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useTasksCount } from '@/hooks/useTasks';
 import { useTrees } from '@/hooks/useTrees';
+import { offlineStorage } from '@/services/offlineStorage';
+import { submissionQueue } from '@/services/submissionQueue';
+import { syncQueuedSubmissions } from '@/services/submissionSync';
+import { syncService } from '@/services/syncService';
 import { tokenStorage } from '@/services/tokenStorage';
 import type { Tree } from '@/types/tree';
+import { modifyLeafletHtmlForOffline } from '@/utils/mapHtmlModifier';
 import { Ionicons } from '@expo/vector-icons';
 import { Asset } from "expo-asset";
 import { File } from 'expo-file-system';
@@ -24,6 +30,11 @@ const HomeScreen = () => {
   const [userName, setUserName] = useState<string>('');
   const [userWard, setUserWard] = useState<string>('');
   const { data: treesData, isLoading: isLoadingTrees } = useTrees({ page_size: 100 });
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<string>('');
+  const [lastSync, setLastSync] = useState<string | null>(null);
+  const [queuedCount, setQueuedCount] = useState<number>(0);
+  const { isOnline } = useNetworkStatus();
 
   useEffect(() => {
     let isMounted = true;
@@ -39,7 +50,10 @@ const HomeScreen = () => {
         }
         
         const file = new File(asset.localUri);
-        const htmlContent = await file.text();
+        let htmlContent = await file.text();
+
+        // Modify HTML to use cached tiles when offline
+        htmlContent = await modifyLeafletHtmlForOffline(htmlContent);
 
         if (isMounted) {
           setWebViewContent(htmlContent);
@@ -78,6 +92,91 @@ const HomeScreen = () => {
 
     loadUserData();
   }, []);
+
+  // Load sync status and queue count on mount
+  useEffect(() => {
+    const loadSyncStatus = async () => {
+      try {
+        const [sync, lastSyncTime, queueSize] = await Promise.all([
+          offlineStorage.getSyncStatus(),
+          offlineStorage.getLastSync(),
+          submissionQueue.getQueueSize(),
+        ]);
+        if (sync?.message) {
+          setSyncStatus(sync.message);
+        }
+        if (lastSyncTime) {
+          setLastSync(lastSyncTime);
+        }
+        setQueuedCount(queueSize);
+      } catch (error) {
+        // Silently handle error
+      }
+    };
+
+    loadSyncStatus();
+  }, []);
+
+  // Refresh queue count periodically
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const count = await submissionQueue.getQueueSize();
+        setQueuedCount(count);
+      } catch (error) {
+        // Silently handle error
+      }
+    }, 5000); // Check every 5 seconds
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Auto-sync queued submissions when online
+  useEffect(() => {
+    if (isOnline) {
+      // Small delay to ensure network is stable
+      const timer = setTimeout(() => {
+        syncQueuedSubmissions().catch((error) => {
+          if (__DEV__) {
+            console.error('[HomeScreen] Error auto-syncing queued submissions:', error);
+          }
+        });
+      }, 2000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [isOnline]);
+
+  // Handle sync button press
+  const handleSync = async () => {
+    try {
+      setIsSyncing(true);
+      setSyncStatus('Syncing data...');
+
+      const result = await syncService.syncAllData();
+
+      if (result.success) {
+        setSyncStatus(result.message);
+        const syncTime = await offlineStorage.getLastSync();
+        if (syncTime) {
+          setLastSync(syncTime);
+        }
+        Alert.alert('Sync Successful', result.message);
+      } else {
+        setSyncStatus(result.message);
+        Alert.alert(
+          'Sync Completed with Errors',
+          result.message + (result.errors ? '\n\nErrors:\n' + result.errors.join('\n') : ''),
+        );
+      }
+    } catch (error: any) {
+      const errorMessage = error.message || 'Failed to sync data. Please try again.';
+      setSyncStatus(`Error: ${errorMessage}`);
+      Alert.alert('Sync Failed', errorMessage);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   // Create markers from trees data
   const mapMarkers = useMemo(() => {
@@ -154,6 +253,8 @@ const HomeScreen = () => {
             <TouchableOpacity style={styles.iconButton}>
               <Ionicons name="notifications-outline" size={24} color="#000" />
             </TouchableOpacity>
+            {/* Network Status Indicator */}
+            <View style={[styles.networkIndicator, isOnline ? styles.networkIndicatorOnline : styles.networkIndicatorOffline]} />
             <TouchableOpacity onPress={() => logout()}>
               <Text style={styles.signOutText}>Sign Out</Text>
             </TouchableOpacity>
@@ -182,6 +283,50 @@ const HomeScreen = () => {
             </TouchableOpacity>
           </View>
         </View>
+
+        {/* Sync Button */}
+        <TouchableOpacity
+          style={[styles.syncButton, isSyncing && styles.syncButtonDisabled]}
+          onPress={handleSync}
+          disabled={isSyncing}>
+          {isSyncing ? (
+            <>
+              <ActivityIndicator size="small" color="#FFFFFF" style={styles.syncSpinner} />
+              <Text style={styles.syncButtonText}>Syncing...</Text>
+            </>
+          ) : (
+            <>
+              <Ionicons name="cloud-download-outline" size={20} color="#FFFFFF" />
+              <Text style={styles.syncButtonText}>Sync All Data</Text>
+            </>
+          )}
+        </TouchableOpacity>
+
+        {/* Sync Status */}
+        {syncStatus && (
+          <View style={styles.syncStatusContainer}>
+            <Text style={styles.syncStatusText}>{syncStatus}</Text>
+            {lastSync && (
+              <Text style={styles.lastSyncText}>
+                Last sync: {new Date(lastSync).toLocaleString()}
+              </Text>
+            )}
+          </View>
+        )}
+
+        {/* Offline Reports Button */}
+        <TouchableOpacity
+          style={styles.offlineReportsButton}
+          onPress={() => router.push('/offline-reports')}>
+          <Ionicons name="document-text-outline" size={20} color="#2E8B57" />
+          <Text style={styles.offlineReportsButtonText}>View Offline Reports</Text>
+          {queuedCount > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{queuedCount}</Text>
+            </View>
+          )}
+          <Ionicons name="chevron-forward" size={20} color="#666" />
+        </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.tasksCard}
@@ -266,6 +411,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#000',
     fontWeight: '500',
+  },
+  networkIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginHorizontal: 8,
+  },
+  networkIndicatorOnline: {
+    backgroundColor: '#2E8B57',
+  },
+  networkIndicatorOffline: {
+    backgroundColor: '#F44336',
   },
   topRow: {
     flexDirection: 'row',
@@ -374,6 +531,75 @@ const styles = StyleSheet.create({
   },
   roundIconText: {
     fontSize: 18,
+  },
+  syncButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#2E8B57',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    marginBottom: 16,
+    gap: 8,
+  },
+  syncButtonDisabled: {
+    opacity: 0.7,
+  },
+  syncSpinner: {
+    marginRight: 8,
+  },
+  syncButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  syncStatusContainer: {
+    backgroundColor: '#F0F0F0',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+  },
+  syncStatusText: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 4,
+  },
+  lastSyncText: {
+    fontSize: 10,
+    color: '#999',
+  },
+  offlineReportsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    gap: 12,
+  },
+  offlineReportsButtonText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#000',
+  },
+  badge: {
+    backgroundColor: '#F44336',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  badgeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
   },
 });
 

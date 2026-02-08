@@ -1,4 +1,7 @@
 import SuccessScreen from '@/components/SuccessScreen';
+import { reportService } from '@/services/reportService';
+import { SubmissionData, submitWithOfflineSupport } from '@/services/submitWithOfflineSupport';
+import { modifyLeafletHtmlForOffline } from '@/utils/mapHtmlModifier';
 import { Ionicons } from '@expo/vector-icons';
 import { Asset } from 'expo-asset';
 import { File } from 'expo-file-system';
@@ -88,7 +91,10 @@ export default function RegisterTreeScreen() {
         }
 
         const file = new File(asset.localUri);
-        const htmlContent = await file.text();
+        let htmlContent = await file.text();
+
+        // Modify HTML to use cached tiles when offline
+        htmlContent = await modifyLeafletHtmlForOffline(htmlContent);
 
         if (isMounted) {
           setWebViewContent(htmlContent);
@@ -291,39 +297,13 @@ export default function RegisterTreeScreen() {
 
       setIsSubmitting(true);
 
-      // Create FormData
-      const formData = new FormData();
-
-      // Add image file
+      // Prepare image file data
       const imageUri = treeImage;
       const filename = imageUri.split('/').pop() || 'tree-photo.jpg';
       const match = /\.(\w+)$/.exec(filename);
-      const type = match ? `image/${match[1]}` : 'image/jpeg';
+      const imageType = match ? `image/${match[1]}` : 'image/jpeg';
 
-      formData.append('file', {
-        uri: Platform.OS === 'ios' ? imageUri.replace('file://', '') : imageUri,
-        type,
-        name: filename,
-      } as any);
-
-      // Add required fields
-      formData.append('species_id', speciesId);
-      formData.append('custodian_name', custodianName);
-      formData.append('custodian_phone', custodianPhone);
-      formData.append('is_accessible', accessibility === 'yes' ? 'true' : 'false');
-      formData.append('latitude', currentLocation.latitude.toString());
-      formData.append('longitude', currentLocation.longitude.toString());
-
-      // Add optional fields
-      if (accessibility === 'no') {
-        formData.append('accessibility_reason', accessibilityReason);
-      }
-
-      if (locationAccuracy) {
-        formData.append('location_accuracy', locationAccuracy);
-      }
-
-      // Add location metadata
+      // Build location metadata
       const locationMetadata: any = {
         timestamp: new Date().toISOString(),
       };
@@ -342,10 +322,33 @@ export default function RegisterTreeScreen() {
           locationMetadata.speed = locationObject.coords.speed;
         }
       }
-      
-      formData.append('location_metadata', JSON.stringify(locationMetadata));
 
-      // Log FormData contents in development
+      // Build submission data structure
+      const submissionData: SubmissionData = {
+        file: {
+          uri: imageUri,
+          type: imageType,
+          name: filename,
+        },
+        species_id: speciesId,
+        custodian_name: custodianName,
+        custodian_phone: custodianPhone,
+        is_accessible: accessibility === 'yes' ? 'true' : 'false',
+        latitude: currentLocation.latitude.toString(),
+        longitude: currentLocation.longitude.toString(),
+        location_metadata: JSON.stringify(locationMetadata),
+      };
+
+      // Add optional fields
+      if (accessibility === 'no') {
+        submissionData.accessibility_reason = accessibilityReason;
+      }
+
+      if (locationAccuracy) {
+        submissionData.location_accuracy = locationAccuracy;
+      }
+
+      // Log submission data in development
       if (__DEV__) {
         console.log('[Register] Submitting form with:', {
           speciesId,
@@ -358,11 +361,37 @@ export default function RegisterTreeScreen() {
         });
       }
 
-      // TODO: Replace with actual register tree API call
-      // const response = await reportService.registerTree(formData);
+      // Submit with offline support
+      const result = await submitWithOfflineSupport(
+        'register',
+        '/api/reports/validation',
+        submissionData,
+        (formData) => reportService.validateTree(formData)
+      );
 
       setIsSubmitting(false);
-      setShowSuccessScreen(true);
+
+      if (result.success) {
+        if (result.queued) {
+          Alert.alert(
+            'Queued for Sync',
+            result.message || 'Your submission has been queued and will sync when online.',
+            [
+              {
+                text: 'OK',
+                onPress: () => {
+                  setShowSuccessScreen(true);
+                },
+              },
+            ]
+          );
+        } else {
+          setShowSuccessScreen(true);
+        }
+      } else {
+        const errorMessage = result.message || 'Failed to submit. Please try again.';
+        Alert.alert('Error', errorMessage);
+      }
     } catch (error: any) {
       setIsSubmitting(false);
       console.error('Error registering tree:', error);

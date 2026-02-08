@@ -1,15 +1,20 @@
 import SuccessScreen from '@/components/SuccessScreen';
+import { reportService } from '@/services/reportService';
+import { SubmissionData, submitWithOfflineSupport } from '@/services/submitWithOfflineSupport';
+import { modifyLeafletHtmlForOffline } from '@/utils/mapHtmlModifier';
 import { Ionicons } from '@expo/vector-icons';
 import { Asset } from 'expo-asset';
 import { File } from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Image,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -32,6 +37,7 @@ type ViewMode = 'growthCheck' | 'incidentReport';
 
 export default function GrowthCheckScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const [viewMode, setViewMode] = useState<ViewMode>('growthCheck');
   const [currentStep, setCurrentStep] = useState<Step>(1);
   const [webViewContent, setWebViewContent] = useState<string | null>(null);
@@ -39,6 +45,51 @@ export default function GrowthCheckScreen() {
   const [locationAccuracy, setLocationAccuracy] = useState<string>('');
   const [locationObject, setLocationObject] = useState<Location.LocationObject | null>(null);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [accessibility, setAccessibility] = useState<'yes' | 'no'>('yes');
+  const [accessibilityReason, setAccessibilityReason] = useState('');
+
+  // Helper to get string param value
+  const getStringParam = (param: string | string[] | undefined, defaultValue: string = ''): string => {
+    if (Array.isArray(param)) return param[0] || defaultValue;
+    return param || defaultValue;
+  };
+
+  // Store task data in state to persist across re-renders
+  const [taskData, setTaskData] = useState(() => ({
+    treeCode: getStringParam(params.treeCode),
+    speciesName: getStringParam(params.speciesName),
+    speciesId: getStringParam(params.speciesId),
+    custodianName: getStringParam(params.custodianName),
+    custodianPhone: getStringParam(params.custodianPhone),
+    taskId: getStringParam(params.taskId),
+    treeId: getStringParam(params.treeId),
+    custodianId: getStringParam(params.custodianId),
+  }));
+
+  // Update task data when params change
+  useEffect(() => {
+    const newTreeCode = getStringParam(params.treeCode);
+    const newSpeciesName = getStringParam(params.speciesName);
+    const newSpeciesId = getStringParam(params.speciesId);
+    const newCustodianName = getStringParam(params.custodianName);
+    const newCustodianPhone = getStringParam(params.custodianPhone);
+    const newTaskId = getStringParam(params.taskId);
+    const newTreeId = getStringParam(params.treeId);
+    const newCustodianId = getStringParam(params.custodianId);
+    
+    // Only update if we have new values (preserve existing state)
+    setTaskData(prev => ({
+      treeCode: newTreeCode || prev.treeCode,
+      speciesName: newSpeciesName || prev.speciesName,
+      speciesId: newSpeciesId || prev.speciesId,
+      custodianName: newCustodianName || prev.custodianName,
+      custodianPhone: newCustodianPhone || prev.custodianPhone,
+      taskId: newTaskId || prev.taskId,
+      treeId: newTreeId || prev.treeId,
+      custodianId: newCustodianId || prev.custodianId,
+    }));
+  }, [params.treeCode, params.speciesName, params.speciesId, params.custodianName, params.custodianPhone, params.taskId, params.treeId, params.custodianId]);
 
   // Form state
   const [soilData, setSoilData] = useState({
@@ -86,7 +137,10 @@ export default function GrowthCheckScreen() {
         }
 
         const file = new File(asset.localUri);
-        const htmlContent = await file.text();
+        let htmlContent = await file.text();
+
+        // Modify HTML to use cached tiles when offline
+        htmlContent = await modifyLeafletHtmlForOffline(htmlContent);
 
         if (isMounted) {
           setWebViewContent(htmlContent);
@@ -264,22 +318,306 @@ export default function GrowthCheckScreen() {
     return steps.join('/');
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (currentStep < 4) {
       setCurrentStep((prev) => (prev + 1) as Step);
     } else {
       // Submit form
-      console.log('Submitting growth check data...');
-      setSuccessTaskName('Growth Check');
-      setShowSuccessScreen(true);
+      if (__DEV__) {
+        console.log('[GrowthCheck] handleNext called, submitting form...');
+      }
+      await handleSubmitGrowthCheck();
     }
   };
 
-  const handleIncidentSubmit = () => {
-    // Submit incident report
-    console.log('Submitting incident report...', incidentData);
-    setSuccessTaskName('Report Incident');
-    setShowSuccessScreen(true);
+  const handleSubmitGrowthCheck = async () => {
+    try {
+      if (__DEV__) {
+        console.log('[GrowthCheck] Starting submission, taskData:', taskData);
+        console.log('[GrowthCheck] Has treeImage:', !!treeImage);
+      }
+
+      // Validation
+      if (!treeImage) {
+        Alert.alert('Error', 'Please capture a tree photo before submitting.');
+        return;
+      }
+
+      if (!taskData.treeId) {
+        if (__DEV__) {
+          console.error('[GrowthCheck] Validation failed: treeId is missing');
+        }
+        Alert.alert('Error', 'Tree ID is missing. Please go back and try again.');
+        return;
+      }
+
+      if (!taskData.taskId) {
+        if (__DEV__) {
+          console.error('[GrowthCheck] Validation failed: taskId is missing');
+        }
+        Alert.alert('Error', 'Task ID is missing. Please go back and try again.');
+        return;
+      }
+
+      setIsSubmitting(true);
+
+      // Build location metadata
+      const locationMetadata: any = {
+        timestamp: Date.now(),
+      };
+      
+      if (locationObject?.coords) {
+        if (locationObject.coords.altitude !== null && locationObject.coords.altitude !== undefined) {
+          locationMetadata.altitude = locationObject.coords.altitude;
+        }
+      }
+
+      // Build submission data structure
+      const submissionData: SubmissionData = {
+        tree_id: taskData.treeCode || taskData.treeId,
+        task_id: taskData.taskId,
+        latitude: currentLocation.latitude.toString(),
+        longitude: currentLocation.longitude.toString(),
+        location_metadata: JSON.stringify(locationMetadata),
+        broken_branch: physicalCondition.brokenBranch,
+        damaged_bark: physicalCondition.damagedBark,
+        bent_stem: physicalCondition.bentStem,
+        roots_exposure: physicalCondition.rootsExposure,
+      };
+
+      // Add location accuracy if available
+      if (locationAccuracy) {
+        submissionData.location_accuracy = locationAccuracy;
+      }
+
+      // Add soil condition data - extract numeric value from range string
+      if (soilData.fertility) {
+        const fertilityValue = soilData.fertility.split('-')[0].trim();
+        submissionData.soil_condition = fertilityValue;
+      }
+      if (soilData.moisture) {
+        const moistureValue = soilData.moisture.split('-')[0].trim();
+        submissionData.moisture_content = moistureValue;
+      }
+      if (soilData.ph) {
+        const phValue = soilData.ph.split('-')[0].trim();
+        submissionData.ph_value = phValue;
+      }
+      if (soilData.temperature) {
+        const tempValue = soilData.temperature.split('-')[0].trim();
+        submissionData.temperature = tempValue;
+      }
+      if (soilData.sunlight) {
+        const sunlightValue = soilData.sunlight.replace('<', '').split('-')[0].trim();
+        submissionData.sunlight = sunlightValue;
+      }
+
+      // Add leaf image (optional)
+      if (leafImage) {
+        const leafFilename = leafImage.split('/').pop() || 'leaf-image.jpg';
+        const leafMatch = /\.(\w+)$/.exec(leafFilename);
+        const leafType = leafMatch ? `image/${leafMatch[1]}` : 'image/jpeg';
+        submissionData.leaf_image = {
+          uri: leafImage,
+          type: leafType,
+          name: leafFilename,
+        };
+      }
+
+      // Add stem image (optional)
+      if (stemImage) {
+        const stemFilename = stemImage.split('/').pop() || 'stem-image.jpg';
+        const stemMatch = /\.(\w+)$/.exec(stemFilename);
+        const stemType = stemMatch ? `image/${stemMatch[1]}` : 'image/jpeg';
+        submissionData.stem_image = {
+          uri: stemImage,
+          type: stemType,
+          name: stemFilename,
+        };
+      }
+
+      // Add additional comments
+      if (comments.trim()) {
+        submissionData.additional_comments = comments.trim();
+      }
+
+      // Log submission data in development
+      if (__DEV__) {
+        console.log('[GrowthCheck] Submitting form with:', {
+          treeId: taskData.treeId,
+          taskId: taskData.taskId,
+          speciesId: taskData.speciesId,
+          latitude: currentLocation.latitude,
+          longitude: currentLocation.longitude,
+          hasLeafImage: !!leafImage,
+          hasStemImage: !!stemImage,
+        });
+      }
+
+      // Submit with offline support
+      const result = await submitWithOfflineSupport(
+        'growth_check',
+        '/api/reports/growth-stage',
+        submissionData,
+        (formData) => reportService.submitGrowthStage(formData)
+      );
+
+      setIsSubmitting(false);
+
+      if (result.success) {
+        if (result.queued) {
+          Alert.alert(
+            'Queued for Sync',
+            result.message || 'Your submission has been queued and will sync when online.',
+            [
+              {
+                text: 'OK',
+                onPress: () => {
+                  setSuccessTaskName('Growth Check');
+                  setShowSuccessScreen(true);
+                },
+              },
+            ]
+          );
+        } else {
+          setSuccessTaskName('Growth Check');
+          setShowSuccessScreen(true);
+        }
+      } else {
+        const errorMessage = result.message || 'Failed to submit growth check. Please try again.';
+        Alert.alert('Error', errorMessage);
+      }
+    } catch (error: any) {
+      setIsSubmitting(false);
+      console.error('[GrowthCheck] Error submitting growth check:', error);
+      
+      const errorMessage = error.message || 'Failed to submit growth check. Please try again.';
+      Alert.alert('Error', errorMessage);
+    }
+  };
+
+  const handleIncidentSubmit = async () => {
+    try {
+      if (__DEV__) {
+        console.log('[GrowthCheck] Starting incident report submission, taskData:', taskData);
+        console.log('[GrowthCheck] Has incidentPhoto:', !!incidentPhoto);
+      }
+
+      // Validation
+      if (!incidentPhoto) {
+        Alert.alert('Error', 'Please capture a photo of the incident before submitting.');
+        return;
+      }
+
+      if (!taskData.treeId) {
+        if (__DEV__) {
+          console.error('[GrowthCheck] Validation failed: treeId is missing');
+        }
+        Alert.alert('Error', 'Tree ID is missing. Please go back and try again.');
+        return;
+      }
+
+      setIsSubmitting(true);
+
+      // Prepare image file data
+      const imageUri = incidentPhoto;
+      const filename = imageUri.split('/').pop() || 'incident-photo.jpg';
+      const match = /\.(\w+)$/.exec(filename);
+      const imageType = match ? `image/${match[1]}` : 'image/jpeg';
+
+      // Build location metadata
+      const locationMetadata: any = {
+        timestamp: Date.now(),
+      };
+      
+      if (locationObject?.coords) {
+        if (locationObject.coords.altitude !== null && locationObject.coords.altitude !== undefined) {
+          locationMetadata.altitude = locationObject.coords.altitude;
+        }
+      }
+
+      // Build submission data structure
+      const submissionData: SubmissionData = {
+        file: {
+          uri: imageUri,
+          type: imageType,
+          name: filename,
+        },
+        tree_id: taskData.treeCode || taskData.treeId,
+        latitude: currentLocation.latitude.toString(),
+        longitude: currentLocation.longitude.toString(),
+        location_metadata: JSON.stringify(locationMetadata),
+        damaged_destroyed: incidentData.damageDestroyed,
+        missing_tree: incidentData.missingTree,
+      };
+
+      // Add optional fields
+      if (taskData.taskId) {
+        submissionData.task_id = taskData.taskId;
+      }
+
+      if (locationAccuracy) {
+        submissionData.location_accuracy = locationAccuracy;
+      }
+
+      if (incidentData.others.trim()) {
+        submissionData.others = incidentData.others.trim();
+      }
+
+      // Log FormData contents in development
+      if (__DEV__) {
+        console.log('[GrowthCheck] Submitting incident report with:', {
+          treeId: taskData.treeCode || taskData.treeId,
+          taskId: taskData.taskId,
+          latitude: currentLocation.latitude,
+          longitude: currentLocation.longitude,
+          hasImage: !!incidentPhoto,
+          damageDestroyed: incidentData.damageDestroyed,
+          missingTree: incidentData.missingTree,
+          others: incidentData.others,
+        });
+      }
+
+      // Submit with offline support
+      const result = await submitWithOfflineSupport(
+        'incident',
+        '/api/reports/incident',
+        submissionData,
+        (formData) => reportService.submitIncident(formData)
+      );
+
+      setIsSubmitting(false);
+
+      if (result.success) {
+        if (result.queued) {
+          Alert.alert(
+            'Queued for Sync',
+            result.message || 'Your submission has been queued and will sync when online.',
+            [
+              {
+                text: 'OK',
+                onPress: () => {
+                  setSuccessTaskName('Incident Report');
+                  setShowSuccessScreen(true);
+                },
+              },
+            ]
+          );
+        } else {
+          setSuccessTaskName('Incident Report');
+          setShowSuccessScreen(true);
+        }
+      } else {
+        const errorMessage = result.message || 'Failed to submit incident report. Please try again.';
+        Alert.alert('Error', errorMessage);
+      }
+    } catch (error: any) {
+      setIsSubmitting(false);
+      console.error('[GrowthCheck] Error submitting incident report:', error);
+      
+      const errorMessage = error.message || 'Failed to submit incident report. Please try again.';
+      Alert.alert('Error', errorMessage);
+    }
   };
 
   const handlePrevious = () => {
@@ -556,6 +894,45 @@ export default function GrowthCheckScreen() {
           )}
         </View>
       </View>
+      
+      {/* Accessibility Section */}
+      <View style={styles.accessibilitySection}>
+        <Text style={styles.formLabel}>Accessibility</Text>
+        <View style={styles.radioGroup}>
+          <TouchableOpacity
+            style={styles.radioOption}
+            onPress={() => setAccessibility('yes')}>
+            <View style={styles.radioButton}>
+              {accessibility === 'yes' && <View style={styles.radioButtonSelected} />}
+            </View>
+            <Text style={styles.radioLabel}>Yes</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.radioOption}
+            onPress={() => setAccessibility('no')}>
+            <View style={styles.radioButton}>
+              {accessibility === 'no' && <View style={styles.radioButtonSelected} />}
+            </View>
+            <Text style={styles.radioLabel}>No</Text>
+          </TouchableOpacity>
+        </View>
+        {accessibility === 'no' && (
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Comment (Required)</Text>
+            <TextInput
+              style={styles.commentInput}
+              placeholder="Please provide a reason why the tree is not accessible"
+              placeholderTextColor="#999"
+              value={accessibilityReason}
+              onChangeText={setAccessibilityReason}
+              multiline
+              numberOfLines={4}
+              textAlignVertical="top"
+            />
+          </View>
+        )}
+      </View>
+
       <View style={styles.commentsSection}>
         <Text style={styles.formLabel}>Additional Comments</Text>
         <TextInput
@@ -751,10 +1128,15 @@ export default function GrowthCheckScreen() {
         </View>
       </View>
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}>
+      <KeyboardAvoidingView
+        style={styles.keyboardView}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled">
         {/* Map Section */}
         <View style={styles.mapContainer}>
           {!webViewContent ? (
@@ -854,19 +1236,19 @@ export default function GrowthCheckScreen() {
         <View style={styles.treeInfoSection}>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Tree Name:</Text>
-            <Text style={styles.infoValue}>Moringa</Text>
+            <Text style={styles.infoValue}>{taskData.speciesName || 'N/A'}</Text>
           </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Tree ID:</Text>
-            <Text style={styles.infoValue}>325345</Text>
+            <Text style={styles.infoValue}>{taskData.treeId || taskData.treeCode || 'N/A'}</Text>
           </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Custodian Name:</Text>
-            <Text style={styles.infoValue}>Mal. Ali U</Text>
+            <Text style={styles.infoValue}>{taskData.custodianName || 'N/A'}</Text>
           </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Phone No:</Text>
-            <Text style={styles.infoValue}>09043222222</Text>
+            <Text style={styles.infoValue}>{taskData.custodianPhone || 'N/A'}</Text>
           </View>
         </View>
 
@@ -876,7 +1258,8 @@ export default function GrowthCheckScreen() {
         ) : (
           <>{renderIncidentReport()}</>
         )}
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* Bottom Navigation Buttons */}
       <View style={styles.bottomButtons}>
@@ -888,14 +1271,46 @@ export default function GrowthCheckScreen() {
               </TouchableOpacity>
             )}
             <TouchableOpacity 
-              style={[styles.nextButton, currentStep === 1 && styles.nextButtonFullWidth]} 
-              onPress={handleNext}>
-              <Text style={styles.nextButtonText}>{currentStep === 4 ? 'Submit' : 'Next'}</Text>
+              style={[styles.nextButton, currentStep === 1 && styles.nextButtonFullWidth, isSubmitting && styles.submitButtonDisabled]} 
+              onPress={() => {
+                if (__DEV__) {
+                  console.log('[GrowthCheck] Submit button pressed, currentStep:', currentStep, 'isSubmitting:', isSubmitting);
+                }
+                handleNext().catch((error) => {
+                  console.error('[GrowthCheck] Unhandled error in handleNext:', error);
+                });
+              }}
+              disabled={isSubmitting}>
+              {isSubmitting ? (
+                <>
+                  <ActivityIndicator size="small" color="#FFFFFF" style={styles.submitSpinner} />
+                  <Text style={styles.nextButtonText}>Submitting...</Text>
+                </>
+              ) : (
+                <Text style={styles.nextButtonText}>{currentStep === 4 ? 'Submit' : 'Next'}</Text>
+              )}
             </TouchableOpacity>
           </>
         ) : (
-          <TouchableOpacity style={styles.submitButton} onPress={handleIncidentSubmit}>
-            <Text style={styles.submitButtonText}>Submit</Text>
+          <TouchableOpacity 
+            style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]} 
+            onPress={() => {
+              if (__DEV__) {
+                console.log('[GrowthCheck] Incident report submit button pressed, isSubmitting:', isSubmitting);
+              }
+              handleIncidentSubmit().catch((error) => {
+                console.error('[GrowthCheck] Unhandled error in handleIncidentSubmit:', error);
+              });
+            }}
+            disabled={isSubmitting}>
+            {isSubmitting ? (
+              <>
+                <ActivityIndicator size="small" color="#FFFFFF" style={styles.submitSpinner} />
+                <Text style={styles.submitButtonText}>Submitting...</Text>
+              </>
+            ) : (
+              <Text style={styles.submitButtonText}>Submit</Text>
+            )}
           </TouchableOpacity>
         )}
       </View>
@@ -956,6 +1371,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#000',
     fontWeight: '500',
+  },
+  keyboardView: {
+    flex: 1,
   },
   scrollView: {
     flex: 1,
@@ -1406,6 +1824,57 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
     flex: 1,
     minWidth: 150,
+  },
+  radioGroup: {
+    flexDirection: 'row',
+    gap: 24,
+    marginTop: 8,
+  },
+  radioOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  radioButton: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#2E8B57',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioButtonSelected: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#2E8B57',
+  },
+  radioLabel: {
+    fontSize: 14,
+    color: '#000',
+  },
+  commentInput: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: '#000',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    minHeight: 100,
+    textAlignVertical: 'top',
+  },
+  submitButtonDisabled: {
+    opacity: 0.7,
+  },
+  submitSpinner: {
+    marginRight: 8,
+  },
+  accessibilitySection: {
+    marginTop: 20,
+    marginBottom: 20,
   },
 });
 

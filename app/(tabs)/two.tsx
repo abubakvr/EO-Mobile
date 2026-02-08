@@ -1,3 +1,4 @@
+import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useTasks } from '@/hooks/useTasks';
 import type { Task } from '@/types/task';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,6 +22,7 @@ export default function ScheduleScreen() {
   const router = useRouter();
   const scrollViewRef = useRef<ScrollView>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const { isOnline } = useNetworkStatus();
   const { data, isLoading, error, refetch, isRefetching } = useTasks({
     page: currentPage,
     page_size: DEFAULT_PAGE_SIZE,
@@ -81,6 +83,8 @@ export default function ScheduleScreen() {
           <TouchableOpacity style={styles.iconButton}>
             <Ionicons name="notifications-outline" size={24} color="#000" />
           </TouchableOpacity>
+          {/* Network Status Indicator */}
+          <View style={[styles.networkIndicator, isOnline ? styles.networkIndicatorOnline : styles.networkIndicatorOffline]} />
           <TouchableOpacity>
             <Text style={styles.signOutText}>Sign Out</Text>
           </TouchableOpacity>
@@ -180,7 +184,19 @@ export default function ScheduleScreen() {
                           },
                         });
                       } else {
-                        router.push('/growthcheck');
+                        router.push({
+                          pathname: '/growthcheck',
+                          params: {
+                            taskId: task.id.toString(),
+                            treeId: task.tree_id.toString(),
+                            treeCode: task.tree?.tree_code || '',
+                            speciesName: task.tree?.species_name || '',
+                            speciesId: task.tree?.species_id?.toString() || '',
+                            custodianName: task.tree?.custodian?.full_name || '',
+                            custodianPhone: task.tree?.custodian?.phone || '',
+                            custodianId: task.tree?.custodian_id?.toString() || '',
+                          },
+                        });
                       }
                     }}>
                     <Text
@@ -328,6 +344,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#000',
     fontWeight: '500',
+  },
+  networkIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginHorizontal: 8,
+  },
+  networkIndicatorOnline: {
+    backgroundColor: '#2E8B57',
+  },
+  networkIndicatorOffline: {
+    backgroundColor: '#F44336',
   },
   scrollView: {
     flex: 1,

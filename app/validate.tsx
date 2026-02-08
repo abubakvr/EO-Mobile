@@ -1,5 +1,7 @@
 import SuccessScreen from '@/components/SuccessScreen';
 import { reportService } from '@/services/reportService';
+import { SubmissionData, submitWithOfflineSupport } from '@/services/submitWithOfflineSupport';
+import { modifyLeafletHtmlForOffline } from '@/utils/mapHtmlModifier';
 import { Ionicons } from '@expo/vector-icons';
 import { Asset } from 'expo-asset';
 import { File } from 'expo-file-system';
@@ -11,14 +13,13 @@ import {
   ActivityIndicator,
   Alert,
   Image,
-  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
 import { LeafletView } from 'react-native-leaflet-view';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -123,7 +124,10 @@ export default function ValidateTreeScreen() {
         }
 
         const file = new File(asset.localUri);
-        const htmlContent = await file.text();
+        let htmlContent = await file.text();
+
+        // Modify HTML to use cached tiles when offline
+        htmlContent = await modifyLeafletHtmlForOffline(htmlContent);
 
         if (isMounted) {
           setWebViewContent(htmlContent);
@@ -362,44 +366,13 @@ export default function ValidateTreeScreen() {
 
       setIsSubmitting(true);
 
-      // Create FormData
-      const formData = new FormData();
-
-      // Add image file
-      // For React Native, FormData file format should be: { uri, type, name }
+      // Prepare image file data
       const imageUri = treeImage;
       const filename = imageUri.split('/').pop() || 'tree-photo.jpg';
       const match = /\.(\w+)$/.exec(filename);
-      const type = match ? `image/${match[1]}` : 'image/jpeg';
+      const imageType = match ? `image/${match[1]}` : 'image/jpeg';
 
-      // React Native FormData file format
-      formData.append('file', {
-        uri: Platform.OS === 'ios' ? imageUri.replace('file://', '') : imageUri,
-        type,
-        name: filename,
-      } as any);
-
-      // Add required fields
-      // FormData.append requires all values to be strings in React Native
-      formData.append('tree_id', taskData.treeId);
-      formData.append('task_id', taskData.taskId);
-      formData.append('species_id', taskData.speciesId);
-      formData.append('is_accessible', accessibility === 'yes' ? 'true' : 'false');
-      // Latitude and longitude as strings (API expects numbers but FormData needs strings)
-      formData.append('latitude', currentLocation.latitude.toString());
-      formData.append('longitude', currentLocation.longitude.toString());
-
-      // Add optional fields
-      // Always include accessibility_reason if accessibility is "no" (even if empty, but we validate it's not empty)
-      if (accessibility === 'no') {
-        formData.append('accessibility_reason', accessibilityReason);
-      }
-
-      if (locationAccuracy) {
-        formData.append('location_accuracy', locationAccuracy);
-      }
-
-      // Add location metadata as JSON string
+      // Build location metadata
       const locationMetadata: any = {
         timestamp: new Date().toISOString(),
       };
@@ -418,18 +391,41 @@ export default function ValidateTreeScreen() {
           locationMetadata.speed = locationObject.coords.speed;
         }
       }
-      
-      formData.append('location_metadata', JSON.stringify(locationMetadata));
+
+      // Build submission data structure
+      const submissionData: SubmissionData = {
+        file: {
+          uri: imageUri,
+          type: imageType,
+          name: filename,
+        },
+        tree_id: taskData.treeId,
+        task_id: taskData.taskId,
+        species_id: taskData.speciesId,
+        is_accessible: accessibility === 'yes' ? 'true' : 'false',
+        latitude: currentLocation.latitude.toString(),
+        longitude: currentLocation.longitude.toString(),
+        location_metadata: JSON.stringify(locationMetadata),
+      };
+
+      // Add optional fields
+      if (accessibility === 'no') {
+        submissionData.accessibility_reason = accessibilityReason;
+      }
+
+      if (locationAccuracy) {
+        submissionData.location_accuracy = locationAccuracy;
+      }
 
       if (taskData.custodianName) {
-        formData.append('custodian_name', taskData.custodianName);
+        submissionData.custodian_name = taskData.custodianName;
       }
 
       if (taskData.custodianPhone) {
-        formData.append('custodian_phone', taskData.custodianPhone);
+        submissionData.custodian_phone = taskData.custodianPhone;
       }
 
-      // Log FormData contents in development
+      // Log submission data in development
       if (__DEV__) {
         console.log('[Validate] Submitting form with:', {
           treeId: taskData.treeId,
@@ -439,15 +435,40 @@ export default function ValidateTreeScreen() {
           latitude: currentLocation.latitude,
           longitude: currentLocation.longitude,
           hasImage: !!treeImage,
-          imageUri: treeImage,
         });
       }
 
-      // Submit to API
-      const response = await reportService.validateTree(formData);
+      // Submit with offline support
+      const result = await submitWithOfflineSupport(
+        'validate',
+        '/api/reports/validation',
+        submissionData,
+        (formData) => reportService.validateTree(formData)
+      );
 
       setIsSubmitting(false);
-      setShowSuccessScreen(true);
+
+      if (result.success) {
+        if (result.queued) {
+          Alert.alert(
+            'Queued for Sync',
+            result.message || 'Your submission has been queued and will sync when online.',
+            [
+              {
+                text: 'OK',
+                onPress: () => {
+                  setShowSuccessScreen(true);
+                },
+              },
+            ]
+          );
+        } else {
+          setShowSuccessScreen(true);
+        }
+      } else {
+        const errorMessage = result.message || 'Failed to submit. Please try again.';
+        Alert.alert('Error', errorMessage);
+      }
     } catch (error: any) {
       setIsSubmitting(false);
       console.error('Error submitting validation:', error);
