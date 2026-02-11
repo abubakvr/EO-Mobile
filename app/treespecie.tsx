@@ -1,3 +1,4 @@
+import { useAuth } from '@/hooks/useAuth';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
@@ -18,6 +19,7 @@ import { getSpeciesImageSource } from '@/utils/speciesImageMapper';
 export default function TreeSpecieScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const { logout } = useAuth();
   
   // Helper to get string param value
   const getStringParam = (param: string | string[] | undefined, defaultValue: string = ''): string => {
@@ -124,7 +126,7 @@ export default function TreeSpecieScreen() {
           <TouchableOpacity style={styles.iconButton}>
             <Ionicons name="notifications-outline" size={24} color="#000" />
           </TouchableOpacity>
-          <TouchableOpacity>
+          <TouchableOpacity onPress={() => logout()}>
             <Text style={styles.signOutText}>Sign Out</Text>
           </TouchableOpacity>
         </View>

@@ -1,9 +1,10 @@
+import { useAuth } from "@/hooks/useAuth";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { useReports } from "@/hooks/useReports";
 import type { Report } from "@/types/report";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   RefreshControl,
@@ -35,6 +36,7 @@ export default function ReportsScreen() {
   const router = useRouter();
   const scrollViewRef = useRef<ScrollView>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const { logout } = useAuth();
   const { isOnline } = useNetworkStatus();
   const { data, isLoading, error, refetch, isRefetching } = useReports({
     page: currentPage,
@@ -172,7 +174,7 @@ export default function ReportsScreen() {
                 : styles.networkIndicatorOffline,
             ]}
           />
-          <TouchableOpacity>
+          <TouchableOpacity onPress={() => logout()}>
             <Text style={styles.signOutText}>Sign Out</Text>
           </TouchableOpacity>
         </View>

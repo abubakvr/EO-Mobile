@@ -1,3 +1,4 @@
+import { useAuth } from '@/hooks/useAuth';
 import { useReport } from '@/hooks/useReports';
 import { getReportImageUrl } from '@/utils/reportImageUrl';
 import { Ionicons } from '@expo/vector-icons';
@@ -47,6 +48,7 @@ const formatDate = (dateString: string | undefined): string => {
 export default function TreeDetailsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const { logout } = useAuth();
   
   // Helper to ensure string values (route params can be arrays)
   const getStringParam = (param: string | string[] | undefined, defaultValue?: string): string => {
@@ -106,7 +108,7 @@ export default function TreeDetailsScreen() {
           <TouchableOpacity style={styles.iconButton}>
             <Ionicons name="notifications-outline" size={24} color="#000" />
           </TouchableOpacity>
-          <TouchableOpacity>
+          <TouchableOpacity onPress={() => logout()}>
             <Text style={styles.signOutText}>Sign Out</Text>
           </TouchableOpacity>
         </View>

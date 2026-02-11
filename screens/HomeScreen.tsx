@@ -546,7 +546,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 20,
-    paddingBottom: 120,
+    paddingBottom: 220,
   },
   header: {
     flexDirection: "row",

@@ -1,3 +1,4 @@
+import { useAuth } from '@/hooks/useAuth';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useTasks } from '@/hooks/useTasks';
 import type { Task } from '@/types/task';
@@ -22,6 +23,7 @@ export default function ScheduleScreen() {
   const router = useRouter();
   const scrollViewRef = useRef<ScrollView>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const { logout } = useAuth();
   const { isOnline } = useNetworkStatus();
   const { data, isLoading, error, refetch, isRefetching } = useTasks({
     page: currentPage,
@@ -84,7 +86,7 @@ export default function ScheduleScreen() {
           </TouchableOpacity>
           {/* Network Status Indicator */}
           <View style={[styles.networkIndicator, isOnline ? styles.networkIndicatorOnline : styles.networkIndicatorOffline]} />
-          <TouchableOpacity>
+          <TouchableOpacity onPress={() => logout()}>
             <Text style={styles.signOutText}>Sign Out</Text>
           </TouchableOpacity>
         </View>

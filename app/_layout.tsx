@@ -102,6 +102,7 @@ function RootLayoutNav() {
         <Stack.Screen name="details" options={{ headerShown: false }} />
         <Stack.Screen name="treelist" options={{ headerShown: false }} />
         <Stack.Screen name="treespecie" options={{ headerShown: false }} />
+        <Stack.Screen name="offline-reports" options={{ headerShown: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
       </Stack>
     </ThemeProvider>

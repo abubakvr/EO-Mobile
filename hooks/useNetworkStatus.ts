@@ -1,68 +1,41 @@
+import NetInfo from '@react-native-community/netinfo';
 import { useEffect, useState } from 'react';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'https://dev.greenlegacy.ng';
-
 /**
- * Hook to monitor network connectivity status
- * Uses periodic checks to determine if the device is online
+ * Hook to monitor network connectivity status using NetInfo.
+ * Updates instantly when the device goes online/offline (Wi‑Fi, cellular, or none).
  */
 export function useNetworkStatus() {
   const [isOnline, setIsOnline] = useState<boolean>(true);
   const [isChecking, setIsChecking] = useState<boolean>(false);
 
   useEffect(() => {
-    let intervalId: NodeJS.Timeout;
     let isMounted = true;
 
-    const checkNetworkStatus = async () => {
-      if (isChecking) return;
-      
-      setIsChecking(true);
-      try {
-        // Try to fetch from the API base URL to check connectivity
-        // Using a small timeout to avoid blocking
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3000);
+    const unsubscribe = NetInfo.addEventListener((state) => {
+      if (!isMounted) return;
+      // isConnected: true if any connection (wifi/cellular/ethernet etc)
+      // isInternetReachable can be null (unknown), true, or false
+      const connected = state.isConnected === true;
+      const reachable = state.isInternetReachable;
+      const online = connected && (reachable === null || reachable === true);
+      setIsOnline(online);
+      setIsChecking(false);
+    });
 
-        // Try to reach the API server
-        await fetch(`${API_BASE_URL}/api/`, {
-          method: 'HEAD',
-          signal: controller.signal,
-          cache: 'no-cache',
-        });
-
-        clearTimeout(timeoutId);
-        
-        if (isMounted) {
-          setIsOnline(true);
-        }
-      } catch (error) {
-        // Network request failed - likely offline
-        if (isMounted) {
-          setIsOnline(false);
-        }
-      } finally {
-        if (isMounted) {
-          setIsChecking(false);
-        }
-      }
-    };
-
-    // Check immediately
-    checkNetworkStatus();
-
-    // Check every 10 seconds
-    intervalId = setInterval(() => {
-      checkNetworkStatus();
-    }, 10000);
+    NetInfo.fetch().then((state) => {
+      if (!isMounted) return;
+      const connected = state.isConnected === true;
+      const reachable = state.isInternetReachable;
+      const online = connected && (reachable === null || reachable === true);
+      setIsOnline(online);
+    });
 
     return () => {
       isMounted = false;
-      if (intervalId) {
-        clearInterval(intervalId);
-      }
+      unsubscribe();
     };
-  }, [isChecking]);
+  }, []);
 
   return { isOnline, isChecking };
 }

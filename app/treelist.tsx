@@ -1,3 +1,4 @@
+import { useAuth } from "@/hooks/useAuth";
 import { useSpeciesList } from "@/hooks/useSpecies";
 import { getSpeciesImageSource } from "@/utils/speciesImageMapper";
 import { Ionicons } from "@expo/vector-icons";
@@ -19,6 +20,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 export default function TreeListScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const { logout } = useAuth();
   const { species, isLoading, error, refetch } = useSpeciesList();
 
   // Helper to get string param value
@@ -62,7 +64,7 @@ export default function TreeListScreen() {
           <TouchableOpacity style={styles.iconButton}>
             <Ionicons name="notifications-outline" size={24} color="#000" />
           </TouchableOpacity>
-          <TouchableOpacity>
+          <TouchableOpacity onPress={() => logout()}>
             <Text style={styles.signOutText}>Sign Out</Text>
           </TouchableOpacity>
         </View>

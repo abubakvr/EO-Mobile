@@ -7,6 +7,7 @@ import { Asset } from 'expo-asset';
 import { File } from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
+import { useAuth } from '@/hooks/useAuth';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
@@ -38,6 +39,7 @@ type ViewMode = 'growthCheck' | 'incidentReport';
 export default function GrowthCheckScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const { logout } = useAuth();
   const [viewMode, setViewMode] = useState<ViewMode>('growthCheck');
   const [currentStep, setCurrentStep] = useState<Step>(1);
   const [webViewContent, setWebViewContent] = useState<string | null>(null);
@@ -1087,10 +1089,7 @@ export default function GrowthCheckScreen() {
       <SuccessScreen
         taskName={successTaskName}
         message="Has Successfully been sent!"
-        onDone={() => {
-          setShowSuccessScreen(false);
-          router.back();
-        }}
+        onDone={() => router.replace('/(tabs)')}
       />
     );
   }
@@ -1119,7 +1118,7 @@ export default function GrowthCheckScreen() {
           <TouchableOpacity style={styles.iconButton}>
             <Ionicons name="notifications-outline" size={24} color="#000" />
           </TouchableOpacity>
-          <TouchableOpacity>
+          <TouchableOpacity onPress={() => logout()}>
             <Text style={styles.signOutText}>Sign Out</Text>
           </TouchableOpacity>
         </View>
