@@ -30,6 +30,8 @@ export interface LoginResponse {
   refresh_token: string;
   message: string;
   user: User;
+  /** Token lifetime in seconds (optional; app uses default if missing) */
+  expires_in?: number;
 }
 
 export interface AuthTokens {

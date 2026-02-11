@@ -1,247 +1,201 @@
-import { getSyncErrorMessage } from '@/utils/errorHandler';
-import { downloadNigeriaMapTiles } from './mapTileService';
+import * as Location from 'expo-location';
 import { offlineStorage } from './offlineStorage';
 import { taskService } from './taskService';
 import { reportService } from './reportService';
 import { treeService } from './treeService';
 import { speciesService } from './speciesService';
-import { ApiError } from './apiClient';
+import { downloadMapTilesForUserState } from './mapTileService';
+import { getSyncErrorMessage } from '@/utils/errorHandler';
 
 export interface SyncResult {
   success: boolean;
   message: string;
-  data?: {
-    tasks?: any;
-    reports?: any;
-    trees?: any;
-    species?: any;
-  };
   errors?: string[];
 }
 
 /**
  * Sync Service
- * Fetches all app data and stores it locally for offline use
+ * Handles syncing all data from the API to local storage
  */
 export const syncService = {
   /**
-   * Sync all data from the API
-   * Fetches tasks, reports, trees, and species with pagination
+   * Sync all data (tasks, reports, trees, species, map tiles)
    */
   async syncAllData(): Promise<SyncResult> {
     const errors: string[] = [];
-    const syncedData: any = {};
+    let successCount = 0;
+    const totalItems = 5; // tasks, reports, trees, species, map tiles
 
     try {
-      // Update sync status to syncing
-      await offlineStorage.saveSyncStatus('syncing', 'Starting sync...');
-
-      // Fetch all tasks (with pagination)
+      // Sync Tasks
       try {
         if (__DEV__) {
-          console.log('[SyncService] Fetching tasks...');
+          console.log('[SyncService] Syncing tasks...');
         }
-        let allTasks: any[] = [];
-        let page = 1;
-        let hasMore = true;
-
-        while (hasMore) {
-          const response = await taskService.getTasks({ page, page_size: 100 });
-          if (response.data && Array.isArray(response.data)) {
-            allTasks = [...allTasks, ...response.data];
-            hasMore = page * 100 < (response.total || 0);
-            page++;
-          } else {
-            hasMore = false;
-          }
-        }
-
-        const tasksData = {
-          data: allTasks,
-          total: allTasks.length,
-          page: 1,
-          page_size: allTasks.length,
-        };
-
-        await offlineStorage.saveTasks(tasksData);
-        syncedData.tasks = tasksData;
-
+        const tasks = await taskService.getTasks({ page_size: 1000 });
+        await offlineStorage.saveTasks(tasks);
+        successCount++;
         if (__DEV__) {
-          console.log(`[SyncService] Fetched ${allTasks.length} tasks`);
+          console.log('[SyncService] Tasks synced successfully');
         }
       } catch (error: any) {
-        const errorMsg = `Failed to sync tasks: ${error.message || 'Unknown error'}`;
+        const errorMsg = getSyncErrorMessage(error, 'tasks');
         errors.push(errorMsg);
-        console.error('[SyncService]', errorMsg);
+        if (__DEV__) {
+          console.error('[SyncService] Failed to sync tasks:', errorMsg);
+        }
       }
 
-      // Fetch all reports (with pagination)
+      // Sync Reports
       try {
         if (__DEV__) {
-          console.log('[SyncService] Fetching reports...');
+          console.log('[SyncService] Syncing reports...');
         }
-        let allReports: any[] = [];
-        let page = 1;
-        let hasMore = true;
-
-        while (hasMore) {
-          const response = await reportService.getReports({ page, page_size: 100 });
-          if (response.data && Array.isArray(response.data)) {
-            allReports = [...allReports, ...response.data];
-            hasMore = page * 100 < (response.total || 0);
-            page++;
-          } else {
-            hasMore = false;
-          }
-        }
-
-        const reportsData = {
-          data: allReports,
-          total: allReports.length,
-          page: 1,
-          page_size: allReports.length,
-        };
-
-        await offlineStorage.saveReports(reportsData);
-        syncedData.reports = reportsData;
-
+        const reports = await reportService.getReports({ page_size: 1000 });
+        await offlineStorage.saveReports(reports);
+        successCount++;
         if (__DEV__) {
-          console.log(`[SyncService] Fetched ${allReports.length} reports`);
+          console.log('[SyncService] Reports synced successfully');
         }
       } catch (error: any) {
-        const errorMsg = getSyncErrorMessage(error);
+        const errorMsg = getSyncErrorMessage(error, 'reports');
         errors.push(errorMsg);
         if (__DEV__) {
           console.error('[SyncService] Failed to sync reports:', errorMsg);
         }
       }
 
-      // Fetch all trees (with pagination)
+      // Sync Trees
       try {
         if (__DEV__) {
-          console.log('[SyncService] Fetching trees...');
+          console.log('[SyncService] Syncing trees...');
         }
-        let allTrees: any[] = [];
-        let page = 1;
-        let hasMore = true;
-
-        while (hasMore) {
-          const response = await treeService.getTrees({ page, page_size: 100 });
-          if (response.data && Array.isArray(response.data)) {
-            allTrees = [...allTrees, ...response.data];
-            hasMore = page * 100 < (response.total || 0);
-            page++;
-          } else {
-            hasMore = false;
-          }
-        }
-
-        const treesData = {
-          data: allTrees,
-          total: allTrees.length,
-          page: 1,
-          page_size: allTrees.length,
-        };
-
-        await offlineStorage.saveTrees(treesData);
-        syncedData.trees = treesData;
-
+        const trees = await treeService.getTrees({ page_size: 1000 });
+        await offlineStorage.saveTrees(trees);
+        successCount++;
         if (__DEV__) {
-          console.log(`[SyncService] Fetched ${allTrees.length} trees`);
+          console.log('[SyncService] Trees synced successfully');
         }
       } catch (error: any) {
-        const errorMsg = getSyncErrorMessage(error);
+        const errorMsg = getSyncErrorMessage(error, 'trees');
         errors.push(errorMsg);
         if (__DEV__) {
           console.error('[SyncService] Failed to sync trees:', errorMsg);
         }
       }
 
-      // Fetch all species
+      // Sync Species
       try {
         if (__DEV__) {
-          console.log('[SyncService] Fetching species...');
+          console.log('[SyncService] Syncing species...');
         }
-        const speciesResponse = await speciesService.getSpecies();
-        await offlineStorage.saveSpecies(speciesResponse);
-        syncedData.species = speciesResponse;
-
+        const species = await speciesService.getSpecies();
+        await offlineStorage.saveSpecies(species);
+        successCount++;
         if (__DEV__) {
-          console.log(`[SyncService] Fetched ${speciesResponse.data?.length || 0} species`);
+          console.log('[SyncService] Species synced successfully');
         }
       } catch (error: any) {
-        const errorMsg = getSyncErrorMessage(error);
+        const errorMsg = getSyncErrorMessage(error, 'species');
         errors.push(errorMsg);
         if (__DEV__) {
           console.error('[SyncService] Failed to sync species:', errorMsg);
         }
       }
 
-      // Download map tiles for Nigeria
+      // Download map tiles for user's state only (using current location)
       try {
-        if (__DEV__) {
-          console.log('[SyncService] Downloading map tiles...');
+        let location: Location.LocationObject | null = null;
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === Location.PermissionStatus.GRANTED) {
+          location = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          });
         }
-        await downloadNigeriaMapTiles((progress) => {
-          if (__DEV__) {
-            console.log(`[SyncService] Map tiles progress: ${progress.downloaded}/${progress.total} (zoom ${progress.zoom})`);
+        if (location?.coords) {
+          const { latitude, longitude } = location.coords;
+          // Only download map tiles when user is in Nigeria (app is for Nigerian states)
+          const inNigeria =
+            latitude >= 4.2 && latitude <= 13.9 && longitude >= 2.7 && longitude <= 14.7;
+          if (!inNigeria) {
+            errors.push(
+              'Map tiles skipped: location is outside Nigeria. Open the app in Nigeria to sync offline map for your state.'
+            );
+            if (__DEV__) {
+              console.log('[SyncService] Map tiles skipped: location outside Nigeria', latitude, longitude);
+            }
+          } else {
+            if (__DEV__) {
+              console.log('[SyncService] Downloading map tiles for user state at', latitude, longitude);
+            }
+            const result = await downloadMapTilesForUserState(
+              latitude,
+              longitude,
+              (progress) => {
+                if (__DEV__) {
+                  console.log(
+                    `[MapTileService] Downloaded ${progress.downloaded}/${progress.total} tiles (${progress.stateName ?? 'area'})`
+                  );
+                }
+              }
+            );
+            if (result.success) {
+              successCount++;
+              if (__DEV__) {
+                console.log('[SyncService] Map tiles downloaded for', result.stateName ?? 'area:', result.message);
+              }
+            } else {
+              errors.push(result.message || 'Map tiles could not be downloaded. Check your connection and try again.');
+            }
           }
-        });
-        if (__DEV__) {
-          console.log('[SyncService] Map tiles downloaded successfully');
+        } else {
+          errors.push(
+            'Map tiles skipped: enable location permission and try again to sync offline map for your state.'
+          );
+          if (__DEV__) {
+            console.log('[SyncService] Map tiles skipped: no location permission or position.');
+          }
         }
       } catch (error: any) {
-        const errorMsg = getSyncErrorMessage(error);
-        errors.push(`Map tiles: ${errorMsg}`);
+        const errorMsg =
+          error?.message?.includes('Network') || error?.message?.includes('connection')
+            ? 'Map tiles: no internet connection. Check your connection and try again.'
+            : 'Map tiles could not be downloaded. Try again later.';
+        errors.push(errorMsg);
         if (__DEV__) {
-          console.error('[SyncService] Failed to download map tiles:', errorMsg);
+          console.error('[SyncService] Map tiles error:', error?.message ?? error);
         }
       }
 
-      // Save last sync timestamp
-      const syncTimestamp = new Date().toISOString();
-      await offlineStorage.saveLastSync(syncTimestamp);
+      // Save sync timestamp
+      try {
+        await offlineStorage.saveLastSync(new Date().toISOString());
+      } catch (error) {
+        if (__DEV__) {
+          console.error('[SyncService] Failed to save sync timestamp:', error);
+        }
+      }
 
-      // Determine success status
-      const success = errors.length === 0 || Object.keys(syncedData).length > 0;
+      const success = successCount > 0;
       const message = success
-        ? `Sync completed successfully. ${Object.keys(syncedData).length} data types synced.`
-        : `Sync completed with ${errors.length} error(s). Some data may be incomplete.`;
-
-      await offlineStorage.saveSyncStatus(success ? 'success' : 'error', message);
+        ? `Successfully synced ${successCount} of ${totalItems} data types.${errors.length > 0 ? ` ${errors.length} failed.` : ''}`
+        : `Failed to sync data. ${errors.length} error(s) occurred.`;
 
       return {
         success,
         message,
-        data: syncedData,
         errors: errors.length > 0 ? errors : undefined,
       };
     } catch (error: any) {
-      const errorMsg = getSyncErrorMessage(error);
+      const errorMessage = getSyncErrorMessage(error);
       if (__DEV__) {
-        console.error('[SyncService] Sync failed:', errorMsg);
+        console.error('[SyncService] Unexpected error during sync:', error);
       }
-      await offlineStorage.saveSyncStatus('error', errorMsg);
-
       return {
         success: false,
-        message: errorMsg,
-        errors: [errorMsg],
+        message: `Sync failed: ${errorMessage}`,
+        errors: [errorMessage],
       };
     }
-  },
-
-  /**
-   * Get sync status
-   */
-  async getSyncStatus() {
-    return await offlineStorage.getSyncStatus();
-  },
-
-  /**
-   * Get last sync timestamp
-   */
-  async getLastSync() {
-    return await offlineStorage.getLastSync();
   },
 };

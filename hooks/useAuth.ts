@@ -23,19 +23,18 @@ export function useAuthStatus() {
     queryFn: async () => {
       try {
         const isAuthenticated = await authService.isAuthenticated();
-        return { isAuthenticated };
+        return { isAuthenticated: !!isAuthenticated };
       } catch (error) {
-        console.error('Error checking auth status:', error);
-        // Return false on error to prevent infinite loading
+        if (__DEV__) console.error('Error checking auth status:', error);
         return { isAuthenticated: false };
       }
     },
     initialData: { isAuthenticated: false }, // Provide initial data to prevent loading state
-    staleTime: Infinity,
-    gcTime: Infinity, // Previously cacheTime
-    retry: false, // Don't retry on failure
-    refetchOnMount: false, // Don't refetch on mount
-    refetchOnWindowFocus: false, // Don't refetch on window focus
+    staleTime: 0, // Always re-check auth when the hook is used (e.g. app open / index mount)
+    gcTime: Infinity,
+    retry: false,
+    refetchOnMount: true, // Re-check on app open so we can redirect if still logged in
+    refetchOnWindowFocus: false,
   });
 }
 

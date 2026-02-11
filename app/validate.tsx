@@ -13,6 +13,8 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -502,7 +504,7 @@ export default function ValidateTreeScreen() {
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color="#000" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Schedule/Validate</Text>
+          <Text style={styles.headerTitle}>Validate</Text>
         </View>
         <View style={styles.headerRight}>
           <TouchableOpacity style={styles.iconButton}>
@@ -514,10 +516,15 @@ export default function ValidateTreeScreen() {
         </View>
       </View>
 
+      <KeyboardAvoidingView
+        style={styles.keyboardView}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}>
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled">
         {/* Tree ID Section */}
         {/* <View style={styles.treeIdSection}>
           <Text style={styles.treeIdText}>TreeID/{taskData.treeCode || 'N/A'}</Text>
@@ -693,6 +700,7 @@ export default function ValidateTreeScreen() {
       </ScrollView>
 
       {/* Submit Task Button */}
+      </KeyboardAvoidingView>
       <View style={styles.submitContainer}>
         <TouchableOpacity
           style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
@@ -761,6 +769,9 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 20,
     paddingBottom: 100,
+  },
+  keyboardView: {
+    flex: 1,
   },
   treeIdSection: {
     paddingVertical: 12,

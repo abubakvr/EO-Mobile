@@ -1,12 +1,19 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
+import { Stack, SplashScreen as ExpoRouterSplash, useRouter } from 'expo-router';
+import { useEffect, useRef } from 'react';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/components/useColorScheme';
+import { apiClient } from '@/services/apiClient';
+
+// Use expo-router's SplashScreen so preventAutoHideAsync works with the router (required for splash to show in build).
+try {
+  ExpoRouterSplash.preventAutoHideAsync?.();
+} catch {
+  // ignore if splash screen not available
+}
 
 // Create a client for React Query
 const queryClient = new QueryClient({
@@ -28,30 +35,54 @@ export const unstable_settings = {
   initialRouteName: 'index',
 };
 
-// Prevent the splash screen from auto-hiding before asset loading is complete.
-SplashScreen.preventAutoHideAsync();
+const MIN_SPLASH_MS = 800;
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
   });
+  const splashShownAt = useRef<number | null>(null);
 
-  // Expo Router uses Error Boundaries to catch errors in the navigation tree.
+  // Don't throw on font error - allow app to render with system font so it doesn't crash
   useEffect(() => {
-    if (error) throw error;
+    if (error && __DEV__) {
+      console.warn('[RootLayout] Font failed to load:', error?.message);
+    }
   }, [error]);
 
   useEffect(() => {
-    if (loaded) {
-      SplashScreen.hideAsync();
-    }
-  }, [loaded]);
+    if (!(loaded || error)) return;
+    if (splashShownAt.current === null) splashShownAt.current = Date.now();
+    const elapsed = Date.now() - splashShownAt.current;
+    const delay = Math.max(0, MIN_SPLASH_MS - elapsed);
+    const t = setTimeout(() => {
+      try {
+        ExpoRouterSplash.hideAsync?.();
+      } catch {
+        // ignore
+      }
+    }, delay);
+    return () => clearTimeout(t);
+  }, [loaded, error]);
 
-  if (!loaded) {
+  // Show app even if font failed (use system font)
+  if (!loaded && !error) {
     return null;
   }
 
   return <RootLayoutNav />;
+}
+
+function AuthUnauthorizedHandler() {
+  const router = useRouter();
+  useEffect(() => {
+    apiClient.setUnauthorizedCallback(() => {
+      queryClient.clear();
+      router.replace('/');
+    });
+    return () => apiClient.setUnauthorizedCallback(() => {});
+  }, [router]);
+  return null;
 }
 
 function RootLayoutNav() {
@@ -59,6 +90,7 @@ function RootLayoutNav() {
 
   return (
     <QueryClientProvider client={queryClient}>
+    <AuthUnauthorizedHandler />
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack>
         <Stack.Screen name="index" options={{ headerShown: false }} />

@@ -1,4 +1,5 @@
 import { useReport } from '@/hooks/useReports';
+import { getReportImageUrl } from '@/utils/reportImageUrl';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React from 'react';
@@ -56,8 +57,38 @@ export default function TreeDetailsScreen() {
   const reportId = getStringParam(params.reportId);
   const { data: report, isLoading, error } = useReport(reportId ? parseInt(reportId) : undefined);
 
-  // Get first image from report_image_urls or use default
-  const treeImage = report?.report_image_urls?.[0] || 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=800';
+  const isGrowthCheck = (report?.report_type?.toLowerCase().includes('growth') ?? false);
+  const isIncident = (report?.report_type?.toLowerCase().includes('incident') ?? false);
+  const isValidationOrRegistration =
+    (report?.report_type?.toLowerCase().includes('validation') ?? false) ||
+    (report?.report_type?.toLowerCase().includes('registration') ?? false);
+
+  // Resolve image URLs (API returns relative paths e.g. /media/uploads/Tamarin.JPG)
+  const treeImage =
+    getReportImageUrl(report?.report_image_urls?.[0]) ||
+    'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=800';
+  const leafImage =
+    getReportImageUrl(report?.leaf_image_url) ?? getReportImageUrl(report?.report_image_urls?.[1]);
+  const stemImage =
+    getReportImageUrl(report?.stem_image_url) ?? getReportImageUrl(report?.report_image_urls?.[2]);
+
+  // Read growth-stage fields from report top-level or location_metadata
+  const meta = report?.location_metadata ?? {};
+  const g = (key: string) => (report as any)?.[key] ?? meta[key];
+  const soilFertility = g('soil_fertility') ?? g('soil_condition');
+  const moistureContent = g('moisture_content');
+  const phValue = g('ph_value');
+  const temperature = g('temperature');
+  const sunlight = g('sunlight');
+  const humidity = g('humidity');
+  const brokenBranch = g('broken_branch');
+  const damagedBark = g('damaged_bark');
+  const bentStem = g('bent_stem');
+  const rootExposure = g('root_exposure') ?? g('roots_exposure');
+  const odor = g('odor');
+  const notes = g('additional_comments') ?? report?.accessibility_reason;
+  const treeCoords = report?.coordinates;
+  const reportCoords = report?.tree?.location?.coordinates ?? report?.coordinates;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -69,7 +100,7 @@ export default function TreeDetailsScreen() {
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color="#000" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Home/Reports/Details</Text>
+          <Text style={styles.headerTitle}>Details</Text>
         </View>
         <View style={styles.headerRight}>
           <TouchableOpacity style={styles.iconButton}>
@@ -99,184 +130,466 @@ export default function TreeDetailsScreen() {
             </TouchableOpacity>
           </View>
         ) : report ? (
-          <>
-            {/* Tree Image */}
-            {treeImage && (
-              <View style={styles.treeImageContainer}>
-                <Image
-                  source={{ uri: treeImage }}
-                  style={styles.treeImage}
-                  resizeMode="cover"
-                />
-              </View>
-            )}
+          isGrowthCheck ? (
+            /* Growth check: exact format from design */
+            <>
+              {treeImage && (
+                <View style={styles.treeImageContainer}>
+                  <Image source={{ uri: treeImage }} style={styles.treeImage} resizeMode="cover" />
+                </View>
+              )}
 
-            {/* Report Information Section */}
-            <View style={styles.section}>
-              {report.id && (
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Report ID</Text>
-                  <Text style={styles.infoValue}>#{report.id}</Text>
-                </View>
-              )}
-              {report.report_type && (
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Report Type</Text>
-                  <Text style={styles.infoValue}>{report.report_type}</Text>
-                </View>
-              )}
-              {report.status && (
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Status</Text>
-                  <Text style={styles.infoValue}>{report.status}</Text>
-                </View>
-              )}
-              {(report.species_name || report.tree?.species_name) && (
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Species Name</Text>
-                  <Text style={styles.infoValue}>{report.species_name || report.tree?.species_name}</Text>
-                </View>
-              )}
-              {report.tree?.tree_code && (
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Tree Code</Text>
-                  <Text style={styles.infoValue}>{report.tree.tree_code}</Text>
-                </View>
-              )}
-              {report.ward_name && (
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Ward</Text>
-                  <Text style={styles.infoValue}>{report.ward_name}</Text>
-                </View>
-              )}
-              {report.coordinates && (
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Location</Text>
-                  <Text style={styles.infoValue}>{formatCoordinates(report.coordinates)}</Text>
-                </View>
-              )}
-              {report.location_accuracy && (
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Location Accuracy</Text>
-                  <Text style={styles.infoValue}>{report.location_accuracy.toFixed(2)}m</Text>
-                </View>
-              )}
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Accessibility</Text>
-                <Text style={styles.infoValue}>{report.is_accessible ? 'Yes' : 'No'}</Text>
-              </View>
-              {report.accessibility_reason && (
-                <View style={styles.reasonRow}>
-                  <Text style={styles.infoLabel}>Accessibility Reason</Text>
-                  <Text style={styles.reasonText}>{report.accessibility_reason}</Text>
-                </View>
-              )}
-              {report.damaged_destroyed && (
-                <View style={styles.reasonRow}>
-                  <Text style={styles.infoLabel}>Damaged/Destroyed</Text>
-                  <Text style={styles.reasonText}>{report.damaged_destroyed}</Text>
-                </View>
-              )}
-              {report.missing_tree && (
-                <View style={styles.reasonRow}>
-                  <Text style={styles.infoLabel}>Missing Tree</Text>
-                  <Text style={styles.reasonText}>{report.missing_tree}</Text>
-                </View>
-              )}
-              {report.others && (
-                <View style={styles.reasonRow}>
-                  <Text style={styles.infoLabel}>Other Information</Text>
-                  <Text style={styles.reasonText}>{report.others}</Text>
-                </View>
-              )}
-              {report.created_at && (
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Created At</Text>
-                  <Text style={styles.infoValue}>{formatDate(report.created_at)}</Text>
-                </View>
-              )}
-            </View>
-
-            {/* Tree Information Section */}
-            {report.tree && (
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Tree Information</Text>
-                {report.tree.id && (
+                {treeCoords && (
                   <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>Tree ID</Text>
-                    <Text style={styles.infoValue}>{report.tree.id}</Text>
+                    <Text style={styles.infoLabel}>Coordinates</Text>
+                    <Text style={styles.infoValue}>{formatCoordinates(treeCoords)}</Text>
                   </View>
                 )}
-                {report.tree.tree_code && (
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Tree Name</Text>
+                  <Text style={styles.infoValue}>{report.species_name || report.tree?.species_name || '—'}</Text>
+                </View>
+                {(report.tree?.tree_code ?? report.tree?.id) && (
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Tree ID</Text>
+                    <Text style={styles.infoValue}>{report.tree?.tree_code ?? String(report.tree?.id)}</Text>
+                  </View>
+                )}
+                {reportCoords && (
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Coordinates</Text>
+                    <Text style={styles.infoValue}>{formatCoordinates(reportCoords)}</Text>
+                  </View>
+                )}
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Accessibility?</Text>
+                  <Text style={styles.infoValue}>{report.is_accessible ? 'Yes' : 'No'}</Text>
+                </View>
+                {(report.accessibility_reason || notes) && (
+                  <View style={styles.reasonRow}>
+                    <Text style={styles.infoLabel}>Reason</Text>
+                    <Text style={styles.reasonText}>{report.accessibility_reason || notes || '—'}</Text>
+                  </View>
+                )}
+              </View>
+
+              {report.tree?.custodian && (
+                <View style={[styles.section, styles.custodianSection]}>
+                  <Text style={styles.custodianTitleCentered}>Custodian Information</Text>
+                  {report.tree.custodian.full_name && (
+                    <View style={styles.custodianRow}>
+                      <Ionicons name="person" size={20} color="#000" />
+                      <Text style={styles.custodianText}>{report.tree.custodian.full_name}</Text>
+                    </View>
+                  )}
+                  {report.tree.custodian.phone && (
+                    <View style={styles.custodianRow}>
+                      <Ionicons name="call" size={20} color="#000" />
+                      <Text style={styles.custodianText}>{report.tree.custodian.phone}</Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Soil Condition</Text>
+                <View style={styles.twoColumnGrid}>
+                  <View style={styles.twoColumnRow}>
+                    <View style={styles.infoRow}>
+                      <Text style={styles.infoLabel}>Soil fertility</Text>
+                      <Text style={styles.infoValue}>{soilFertility ? `${soilFertility} mg/kg` : '—'}</Text>
+                    </View>
+                    <View style={styles.infoRow}>
+                      <Text style={styles.infoLabel}>PH Value</Text>
+                      <Text style={styles.infoValue}>{phValue ?? '—'}</Text>
+                    </View>
+                    <View style={styles.infoRow}>
+                      <Text style={styles.infoLabel}>Sunlight</Text>
+                      <Text style={styles.infoValue}>{sunlight ?? '—'}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.twoColumnRow}>
+                    <View style={styles.infoRow}>
+                      <Text style={styles.infoLabel}>Moisture Content</Text>
+                      <Text style={styles.infoValue}>{moistureContent ? `${moistureContent}%` : '—'}</Text>
+                    </View>
+                    <View style={styles.infoRow}>
+                      <Text style={styles.infoLabel}>Temperature</Text>
+                      <Text style={styles.infoValue}>{temperature ? `${temperature} °C` : '—'}</Text>
+                    </View>
+                    <View style={styles.infoRow}>
+                      <Text style={styles.infoLabel}>Humidity</Text>
+                      <Text style={styles.infoValue}>{humidity ? `${humidity}%` : '—'}</Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Physical Condition</Text>
+                <View style={styles.twoColumnGrid}>
+                  <View style={styles.twoColumnRow}>
+                    <View style={styles.infoRow}>
+                      <Text style={styles.infoLabel}>Broken branch</Text>
+                      <Text style={styles.infoValue}>{brokenBranch ? (brokenBranch === 'yes' ? 'Yes' : 'No') : '—'}</Text>
+                    </View>
+                    <View style={styles.infoRow}>
+                      <Text style={styles.infoLabel}>Bent Stem</Text>
+                      <Text style={styles.infoValue}>{bentStem ? (bentStem === 'yes' ? 'Yes' : 'No') : '—'}</Text>
+                    </View>
+                    <View style={styles.infoRow}>
+                      <Text style={styles.infoLabel}>Odor</Text>
+                      <Text style={styles.infoValue}>{odor ? (odor === 'yes' ? 'Yes' : 'No') : '—'}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.twoColumnRow}>
+                    <View style={styles.infoRow}>
+                      <Text style={styles.infoLabel}>Damaged Bark</Text>
+                      <Text style={styles.infoValue}>{damagedBark ? (damagedBark === 'yes' ? 'Yes' : 'No') : '—'}</Text>
+                    </View>
+                    <View style={styles.infoRow}>
+                      <Text style={styles.infoLabel}>Exposed Roots</Text>
+                      <Text style={styles.infoValue}>{rootExposure ? (rootExposure === 'yes' ? 'Yes' : 'No') : '—'}</Text>
+                    </View>
+                    <View style={styles.infoRow}>
+                      <Text style={styles.infoLabel}>Humidity</Text>
+                      <Text style={styles.infoValue}>{humidity ? `${humidity}%` : '—'}</Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Leaf/Stem Condition</Text>
+                <View style={styles.leafStemRow}>
+                  <View style={styles.thumbnailBlock}>
+                    <Text style={styles.thumbnailLabel}>Leaf Picture</Text>
+                    {leafImage ? (
+                      <Image source={{ uri: leafImage }} style={styles.thumbnailImage} resizeMode="cover" />
+                    ) : (
+                      <View style={styles.thumbnailPlaceholder}><Text style={styles.thumbnailPlaceholderText}>No image</Text></View>
+                    )}
+                  </View>
+                  <View style={styles.thumbnailBlock}>
+                    <Text style={styles.thumbnailLabel}>Stem Picture</Text>
+                    {stemImage ? (
+                      <Image source={{ uri: stemImage }} style={styles.thumbnailImage} resizeMode="cover" />
+                    ) : (
+                      <View style={styles.thumbnailPlaceholder}><Text style={styles.thumbnailPlaceholderText}>No image</Text></View>
+                    )}
+                  </View>
+                </View>
+              </View>
+
+              {(notes || report.accessibility_reason) && (
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>Notes</Text>
+                  <Text style={styles.reasonText}>{notes || report.accessibility_reason}</Text>
+                </View>
+              )}
+            </>
+          ) : isIncident ? (
+            /* Incident report: exact format from design */
+            <>
+              {treeImage && (
+                <View style={styles.treeImageContainer}>
+                  <Image source={{ uri: treeImage }} style={styles.treeImage} resizeMode="cover" />
+                </View>
+              )}
+
+              <View style={styles.section}>
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Specie Name</Text>
+                  <Text style={styles.infoValue}>{report.species_name || report.tree?.species_name || '—'}</Text>
+                </View>
+                {(report.tree?.tree_code ?? report.tree?.id) && (
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Tree ID</Text>
+                    <Text style={styles.infoValue}>{report.tree?.tree_code ?? String(report.tree?.id)}</Text>
+                  </View>
+                )}
+                {report.coordinates && (
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Location</Text>
+                    <Text style={styles.infoValue}>{formatCoordinates(report.coordinates)}</Text>
+                  </View>
+                )}
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Damage/Destroyed</Text>
+                  <Text style={styles.infoValue}>{report.damaged_destroyed ?? '—'}</Text>
+                </View>
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Missing Tree</Text>
+                  <Text style={styles.infoValue}>{report.missing_tree ?? '—'}</Text>
+                </View>
+                {(report.others != null && report.others !== '') && (
+                  <View style={styles.reasonRow}>
+                    <Text style={styles.infoLabel}>Others</Text>
+                    <Text style={styles.reasonText}>{report.others}</Text>
+                  </View>
+                )}
+              </View>
+
+              {report.tree?.custodian && (
+                <View style={[styles.section, styles.custodianSection]}>
+                  <Text style={styles.custodianTitleCentered}>Custodian Information</Text>
+                  {report.tree.custodian.full_name && (
+                    <View style={styles.custodianRow}>
+                      <Ionicons name="person" size={20} color="#000" />
+                      <Text style={styles.custodianText}>{report.tree.custodian.full_name}</Text>
+                    </View>
+                  )}
+                  {report.tree.custodian.phone && (
+                    <View style={styles.custodianRow}>
+                      <Ionicons name="call" size={20} color="#000" />
+                      <Text style={styles.custodianText}>{report.tree.custodian.phone}</Text>
+                    </View>
+                  )}
+                </View>
+              )}
+            </>
+          ) : isValidationOrRegistration ? (
+            /* Validation / Registration: tree image, Tree ID, Specie Name, Location, Accessibility?, Reason, Date, Custodian */
+            <>
+              {treeImage && (
+                <View style={styles.treeImageContainer}>
+                  <Image source={{ uri: treeImage }} style={styles.treeImage} resizeMode="cover" />
+                </View>
+              )}
+
+              <View style={styles.section}>
+                {(report.tree?.tree_code ?? report.tree?.id) && (
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Tree ID</Text>
+                    <Text style={[styles.infoValue, styles.infoValueEmphasis]}>
+                      {report.tree?.tree_code ?? String(report.tree?.id)}
+                    </Text>
+                  </View>
+                )}
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Specie Name</Text>
+                  <Text style={[styles.infoValue, styles.infoValueEmphasis]}>
+                    {report.species_name || report.tree?.species_name || '—'}
+                  </Text>
+                </View>
+                {report.coordinates && (
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Location</Text>
+                    <Text style={styles.infoValue}>{formatCoordinates(report.coordinates)}</Text>
+                  </View>
+                )}
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Accessibility?</Text>
+                  <Text style={styles.infoValue}>{report.is_accessible ? 'Yes' : 'No'}</Text>
+                </View>
+                {(report.accessibility_reason != null && report.accessibility_reason !== '') && (
+                  <View style={styles.reasonRow}>
+                    <Text style={styles.infoLabel}>Reason</Text>
+                    <Text style={styles.reasonText}>{report.accessibility_reason}</Text>
+                  </View>
+                )}
+                {(report.created_at || report.updated_at) && (
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Date</Text>
+                    <Text style={styles.infoValue}>
+                      {formatDate(report.created_at || report.updated_at)}
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              {report.tree?.custodian && (
+                <View style={[styles.section, styles.custodianSection]}>
+                  <Text style={styles.custodianTitleCentered}>Custodian Information</Text>
+                  {report.tree.custodian.full_name && (
+                    <View style={styles.custodianRow}>
+                      <Ionicons name="person" size={20} color="#000" />
+                      <Text style={styles.custodianText}>{report.tree.custodian.full_name}</Text>
+                    </View>
+                  )}
+                  {report.tree.custodian.phone && (
+                    <View style={styles.custodianRow}>
+                      <Ionicons name="call" size={20} color="#000" />
+                      <Text style={styles.custodianText}>{report.tree.custodian.phone}</Text>
+                    </View>
+                  )}
+                </View>
+              )}
+            </>
+          ) : (
+            /* Default: all other report types */
+            <>
+              {treeImage && (
+                <View style={styles.treeImageContainer}>
+                  <Image source={{ uri: treeImage }} style={styles.treeImage} resizeMode="cover" />
+                </View>
+              )}
+
+              <View style={styles.section}>
+                {report.id && (
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Report ID</Text>
+                    <Text style={styles.infoValue}>#{report.id}</Text>
+                  </View>
+                )}
+                {report.report_type && (
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Report Type</Text>
+                    <Text style={styles.infoValue}>{report.report_type}</Text>
+                  </View>
+                )}
+                {report.status && (
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Status</Text>
+                    <Text style={styles.infoValue}>{report.status}</Text>
+                  </View>
+                )}
+                {(report.species_name || report.tree?.species_name) && (
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Species Name</Text>
+                    <Text style={styles.infoValue}>{report.species_name || report.tree?.species_name}</Text>
+                  </View>
+                )}
+                {report.tree?.tree_code && (
                   <View style={styles.infoRow}>
                     <Text style={styles.infoLabel}>Tree Code</Text>
                     <Text style={styles.infoValue}>{report.tree.tree_code}</Text>
                   </View>
                 )}
-                {report.tree.species_name && (
+                {report.ward_name && (
                   <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>Species</Text>
-                    <Text style={styles.infoValue}>{report.tree.species_name}</Text>
+                    <Text style={styles.infoLabel}>Ward</Text>
+                    <Text style={styles.infoValue}>{report.ward_name}</Text>
                   </View>
                 )}
-                {report.tree.growth_stage && (
+                {report.coordinates && (
                   <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>Growth Stage</Text>
-                    <Text style={styles.infoValue}>{report.tree.growth_stage}</Text>
+                    <Text style={styles.infoLabel}>Location</Text>
+                    <Text style={styles.infoValue}>{formatCoordinates(report.coordinates)}</Text>
                   </View>
                 )}
-                {report.tree.health_status && (
+                {report.location_accuracy && (
                   <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>Health Status</Text>
-                    <Text style={styles.infoValue}>{report.tree.health_status}</Text>
+                    <Text style={styles.infoLabel}>Location Accuracy</Text>
+                    <Text style={styles.infoValue}>{report.location_accuracy.toFixed(2)}m</Text>
                   </View>
                 )}
-                {report.tree.land_type && (
-                  <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>Land Type</Text>
-                    <Text style={styles.infoValue}>{report.tree.land_type}</Text>
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Accessibility</Text>
+                  <Text style={styles.infoValue}>{report.is_accessible ? 'Yes' : 'No'}</Text>
+                </View>
+                {report.accessibility_reason && (
+                  <View style={styles.reasonRow}>
+                    <Text style={styles.infoLabel}>Accessibility Reason</Text>
+                    <Text style={styles.reasonText}>{report.accessibility_reason}</Text>
                   </View>
                 )}
-                {report.tree.date_planted && (
-                  <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>Date Planted</Text>
-                    <Text style={styles.infoValue}>{formatDate(report.tree.date_planted)}</Text>
+                {report.damaged_destroyed && (
+                  <View style={styles.reasonRow}>
+                    <Text style={styles.infoLabel}>Damaged/Destroyed</Text>
+                    <Text style={styles.reasonText}>{report.damaged_destroyed}</Text>
                   </View>
                 )}
-                {report.tree.last_inspected_at && (
+                {report.missing_tree && (
+                  <View style={styles.reasonRow}>
+                    <Text style={styles.infoLabel}>Missing Tree</Text>
+                    <Text style={styles.reasonText}>{report.missing_tree}</Text>
+                  </View>
+                )}
+                {report.others && (
+                  <View style={styles.reasonRow}>
+                    <Text style={styles.infoLabel}>Other Information</Text>
+                    <Text style={styles.reasonText}>{report.others}</Text>
+                  </View>
+                )}
+                {report.created_at && (
                   <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>Last Inspected</Text>
-                    <Text style={styles.infoValue}>{formatDate(report.tree.last_inspected_at)}</Text>
+                    <Text style={styles.infoLabel}>Created At</Text>
+                    <Text style={styles.infoValue}>{formatDate(report.created_at)}</Text>
                   </View>
                 )}
               </View>
-            )}
 
-            {/* Custodian Information Section */}
-            {report.tree?.custodian && (
-              <View style={[styles.section, styles.custodianSection]}>
-                <Text style={styles.custodianTitle}>Custodian Information</Text>
-                {report.tree.custodian.full_name && (
-                  <View style={styles.custodianRow}>
-                    <Ionicons name="person" size={20} color="#000" />
-                    <Text style={styles.custodianText}>{report.tree.custodian.full_name}</Text>
-                  </View>
-                )}
-                {report.tree.custodian.phone && (
-                  <View style={styles.custodianRow}>
-                    <Ionicons name="call" size={20} color="#000" />
-                    <Text style={styles.custodianText}>{report.tree.custodian.phone}</Text>
-                  </View>
-                )}
-                {report.tree.custodian.email && (
-                  <View style={styles.custodianRow}>
-                    <Ionicons name="mail" size={20} color="#000" />
-                    <Text style={styles.custodianText}>{report.tree.custodian.email}</Text>
-                  </View>
-                )}
-              </View>
-            )}
-          </>
+              {report.tree && (
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>Tree Information</Text>
+                  {report.tree.id && (
+                    <View style={styles.infoRow}>
+                      <Text style={styles.infoLabel}>Tree ID</Text>
+                      <Text style={styles.infoValue}>{report.tree.id}</Text>
+                    </View>
+                  )}
+                  {report.tree.tree_code && (
+                    <View style={styles.infoRow}>
+                      <Text style={styles.infoLabel}>Tree Code</Text>
+                      <Text style={styles.infoValue}>{report.tree.tree_code}</Text>
+                    </View>
+                  )}
+                  {report.tree.species_name && (
+                    <View style={styles.infoRow}>
+                      <Text style={styles.infoLabel}>Species</Text>
+                      <Text style={styles.infoValue}>{report.tree.species_name}</Text>
+                    </View>
+                  )}
+                  {report.tree.growth_stage && (
+                    <View style={styles.infoRow}>
+                      <Text style={styles.infoLabel}>Growth Stage</Text>
+                      <Text style={styles.infoValue}>{report.tree.growth_stage}</Text>
+                    </View>
+                  )}
+                  {report.tree.health_status && (
+                    <View style={styles.infoRow}>
+                      <Text style={styles.infoLabel}>Health Status</Text>
+                      <Text style={styles.infoValue}>{report.tree.health_status}</Text>
+                    </View>
+                  )}
+                  {report.tree.land_type && (
+                    <View style={styles.infoRow}>
+                      <Text style={styles.infoLabel}>Land Type</Text>
+                      <Text style={styles.infoValue}>{report.tree.land_type}</Text>
+                    </View>
+                  )}
+                  {report.tree.date_planted && (
+                    <View style={styles.infoRow}>
+                      <Text style={styles.infoLabel}>Date Planted</Text>
+                      <Text style={styles.infoValue}>{formatDate(report.tree.date_planted)}</Text>
+                    </View>
+                  )}
+                  {report.tree.last_inspected_at && (
+                    <View style={styles.infoRow}>
+                      <Text style={styles.infoLabel}>Last Inspected</Text>
+                      <Text style={styles.infoValue}>{formatDate(report.tree.last_inspected_at)}</Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {report.tree?.custodian && (
+                <View style={[styles.section, styles.custodianSection]}>
+                  <Text style={styles.custodianTitle}>Custodian Information</Text>
+                  {report.tree.custodian.full_name && (
+                    <View style={styles.custodianRow}>
+                      <Ionicons name="person" size={20} color="#000" />
+                      <Text style={styles.custodianText}>{report.tree.custodian.full_name}</Text>
+                    </View>
+                  )}
+                  {report.tree.custodian.phone && (
+                    <View style={styles.custodianRow}>
+                      <Ionicons name="call" size={20} color="#000" />
+                      <Text style={styles.custodianText}>{report.tree.custodian.phone}</Text>
+                    </View>
+                  )}
+                  {report.tree.custodian.email && (
+                    <View style={styles.custodianRow}>
+                      <Ionicons name="mail" size={20} color="#000" />
+                      <Text style={styles.custodianText}>{report.tree.custodian.email}</Text>
+                    </View>
+                  )}
+                </View>
+              )}
+            </>
+          )
         ) : null}
       </ScrollView>
     </SafeAreaView>
@@ -373,6 +686,10 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'right',
   },
+  infoValueEmphasis: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
   reasonRow: {
     marginBottom: 12,
   },
@@ -391,6 +708,52 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#000',
     marginBottom: 12,
+  },
+  custodianTitleCentered: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#000',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  twoColumnGrid: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  twoColumnRow: {
+    flex: 1,
+  },
+  leafStemRow: {
+    flexDirection: 'row',
+    gap: 16,
+    marginTop: 8,
+  },
+  thumbnailBlock: {
+    flex: 1,
+  },
+  thumbnailLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#666',
+    marginBottom: 8,
+  },
+  thumbnailImage: {
+    width: '100%',
+    aspectRatio: 1,
+    borderRadius: 8,
+    backgroundColor: '#eee',
+  },
+  thumbnailPlaceholder: {
+    width: '100%',
+    aspectRatio: 1,
+    borderRadius: 8,
+    backgroundColor: '#E8E8E8',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  thumbnailPlaceholderText: {
+    fontSize: 12,
+    color: '#666',
   },
   custodianRow: {
     flexDirection: 'row',

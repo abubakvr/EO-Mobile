@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
+    ActivityIndicator,
     Image,
     ScrollView,
     StatusBar,
@@ -11,70 +12,8 @@ import {
     View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
-// Tree species data with detailed images from Unsplash - using random images
-const treeSpeciesData = [
-  {
-    id: 1,
-    name: 'Moringa',
-    image: 'https://source.unsplash.com/800x600/?moringa,tree',
-  },
-  {
-    id: 2,
-    name: 'Eucalyptus',
-    image: 'https://source.unsplash.com/800x600/?eucalyptus,tree',
-  },
-  {
-    id: 3,
-    name: 'Lemon',
-    image: 'https://source.unsplash.com/800x600/?lemon,tree',
-  },
-  {
-    id: 4,
-    name: 'Locust Beans',
-    image: 'https://source.unsplash.com/800x600/?tree,forest',
-  },
-  {
-    id: 5,
-    name: 'Sandal',
-    image: 'https://source.unsplash.com/800x600/?tree,nature',
-  },
-  {
-    id: 6,
-    name: 'Sesbania',
-    image: 'https://source.unsplash.com/800x600/?tree,green',
-  },
-  {
-    id: 7,
-    name: 'Tamarin',
-    image: 'https://source.unsplash.com/800x600/?tamarind,tree',
-  },
-  {
-    id: 8,
-    name: 'Black Plum',
-    image: 'https://source.unsplash.com/800x600/?plum,tree',
-  },
-  {
-    id: 9,
-    name: 'Dates',
-    image: 'https://source.unsplash.com/800x600/?date,palm,tree',
-  },
-  {
-    id: 10,
-    name: 'Ficus Polita',
-    image: 'https://source.unsplash.com/800x600/?ficus,tree',
-  },
-  {
-    id: 11,
-    name: 'Neem',
-    image: 'https://source.unsplash.com/800x600/?neem,tree',
-  },
-  {
-    id: 12,
-    name: 'Orange',
-    image: 'https://source.unsplash.com/800x600/?orange,tree',
-  },
-];
+import { useSpeciesList } from '@/hooks/useSpecies';
+import { getSpeciesImageSource } from '@/utils/speciesImageMapper';
 
 export default function TreeSpecieScreen() {
   const router = useRouter();
@@ -99,33 +38,60 @@ export default function TreeSpecieScreen() {
     returnPath: getStringParam(params.returnPath, '/validate'),
   };
 
-  // Get initial specie ID from params, default to 1
+  const { species, isLoading } = useSpeciesList();
+
+  // Get initial specie ID from params
   const getInitialSpecieId = (): number => {
     const specieId = params.specieId;
     if (typeof specieId === 'string') {
       const id = parseInt(specieId, 10);
-      if (!isNaN(id) && id >= 1 && id <= 12) {
+      if (!isNaN(id) && id > 0) {
         return id;
       }
     }
-    return 1;
+    // Default to first species if available
+    return species.length > 0 ? species[0].id : 1;
   };
 
-  const [currentSpecieId, setCurrentSpecieId] = useState(getInitialSpecieId());
+  const [currentSpecieId, setCurrentSpecieId] = useState(() => {
+    const specieId = params.specieId;
+    if (typeof specieId === 'string') {
+      const id = parseInt(specieId, 10);
+      if (!isNaN(id) && id > 0) {
+        return id;
+      }
+    }
+    return species.length > 0 ? species[0].id : 1;
+  });
 
-  const currentSpecie = treeSpeciesData.find((s) => s.id === currentSpecieId) || treeSpeciesData[0];
+  // Update currentSpecieId when species load
+  React.useEffect(() => {
+    if (species.length > 0 && currentSpecieId === 1 && !params.specieId) {
+      setCurrentSpecieId(species[0].id);
+    }
+  }, [species.length]);
+
+  const currentSpecie = useMemo(() => {
+    return species.find((s) => s.id === currentSpecieId) || species[0] || null;
+  }, [species, currentSpecieId]);
 
   const handlePrevious = () => {
-    const newId = currentSpecieId > 1 ? currentSpecieId - 1 : 12;
-    setCurrentSpecieId(newId);
+    if (species.length === 0) return;
+    const currentIndex = species.findIndex((s) => s.id === currentSpecieId);
+    const newIndex = currentIndex > 0 ? currentIndex - 1 : species.length - 1;
+    setCurrentSpecieId(species[newIndex].id);
   };
 
   const handleNext = () => {
-    const newId = currentSpecieId < 12 ? currentSpecieId + 1 : 1;
-    setCurrentSpecieId(newId);
+    if (species.length === 0) return;
+    const currentIndex = species.findIndex((s) => s.id === currentSpecieId);
+    const newIndex = currentIndex < species.length - 1 ? currentIndex + 1 : 0;
+    setCurrentSpecieId(species[newIndex].id);
   };
 
   const handleSelectSpecie = () => {
+    if (!currentSpecie) return;
+    
     // Get return path from params, default to /validate
     const returnPath = getStringParam(params.returnPath, '/validate');
     
@@ -133,10 +99,11 @@ export default function TreeSpecieScreen() {
     router.push({
       pathname: returnPath as any,
       params: {
-        selectedSpecie: currentSpecie.name,
+        selectedSpecie: currentSpecie.common_name,
         // Preserve all task data and custodian data, update speciesId
         ...preservedParams,
         speciesId: currentSpecie.id.toString(),
+        speciesName: currentSpecie.common_name,
       },
     });
   };
@@ -151,7 +118,7 @@ export default function TreeSpecieScreen() {
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color="#000" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Home/Schedule/Growth check</Text>
+          <Text style={styles.headerTitle}>Tree Species</Text>
         </View>
         <View style={styles.headerRight}>
           <TouchableOpacity style={styles.iconButton}>
@@ -167,31 +134,54 @@ export default function TreeSpecieScreen() {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}>
-        {/* Title */}
-        <View style={styles.titleContainer}>
-          <Text style={styles.title}>Tree Specie View Guide</Text>
-          <Text style={styles.specieName}>{currentSpecie.name}</Text>
-        </View>
-
-        {/* Tree Image with Navigation Arrows */}
-        <View style={styles.imageContainer}>
-          <Image source={{ uri: currentSpecie.image }} style={styles.treeImage} resizeMode="cover" />
-          
-          {/* Navigation Arrows */}
-          <View style={styles.navigationContainer}>
-            <TouchableOpacity style={styles.navButton} onPress={handlePrevious}>
-              <Ionicons name="chevron-back" size={24} color="#666" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.navButton} onPress={handleNext}>
-              <Ionicons name="chevron-forward" size={24} color="#666" />
-            </TouchableOpacity>
+        {isLoading && species.length === 0 ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#2E8B57" />
+            <Text style={styles.loadingText}>Loading species...</Text>
           </View>
-        </View>
+        ) : !currentSpecie ? (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="leaf-outline" size={48} color="#999" />
+            <Text style={styles.emptyText}>No species available</Text>
+          </View>
+        ) : (
+          <>
+            {/* Title */}
+            <View style={styles.titleContainer}>
+              <Text style={styles.title}>Tree Specie View Guide</Text>
+              <Text style={styles.specieName}>{currentSpecie.common_name}</Text>
+              {currentSpecie.scientific_name && (
+                <Text style={styles.scientificName}>{currentSpecie.scientific_name}</Text>
+              )}
+            </View>
 
-        {/* Select Specie Button */}
-        <TouchableOpacity style={styles.selectButton} onPress={handleSelectSpecie}>
-          <Text style={styles.selectButtonText}>Select Specie</Text>
-        </TouchableOpacity>
+            {/* Tree Image with Navigation Arrows */}
+            <View style={styles.imageContainer}>
+              <Image
+                source={getSpeciesImageSource(currentSpecie.common_name, '800x600')}
+                style={styles.treeImage}
+                resizeMode="cover"
+              />
+              
+              {/* Navigation Arrows */}
+              {species.length > 1 && (
+                <View style={styles.navigationContainer}>
+                  <TouchableOpacity style={styles.navButton} onPress={handlePrevious}>
+                    <Ionicons name="chevron-back" size={24} color="#666" />
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.navButton} onPress={handleNext}>
+                    <Ionicons name="chevron-forward" size={24} color="#666" />
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+
+            {/* Select Specie Button */}
+            <TouchableOpacity style={styles.selectButton} onPress={handleSelectSpecie}>
+              <Text style={styles.selectButtonText}>Select Specie</Text>
+            </TouchableOpacity>
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -258,6 +248,36 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '500',
     color: '#000',
+  },
+  scientificName: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#666',
+    fontStyle: 'italic',
+    marginTop: 4,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#666',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  emptyText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#999',
+    textAlign: 'center',
   },
   imageContainer: {
     borderRadius: 12,

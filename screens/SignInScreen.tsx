@@ -1,6 +1,6 @@
-import { useAuth } from '@/hooks/useAuth';
-import { ApiError } from '@/services/apiClient';
-import React, { useState } from 'react';
+import { useAuth } from "@/hooks/useAuth";
+import { ApiError } from "@/services/apiClient";
+import { useState } from "react";
 import {
   ActivityIndicator,
   ImageBackground,
@@ -11,42 +11,44 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View
-} from 'react-native';
+  View,
+} from "react-native";
 
 const HEADER_IMAGE =
-  'https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=800&q=80';
+  "https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=800&q=80";
 
 const SignInScreen = () => {
   const { login, isLoggingIn, loginError } = useAuth();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
 
   return (
     <KeyboardAvoidingView
       style={styles.root}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      behavior={Platform.OS === "ios" ? "padding" : "padding"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+    >
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         bounces={false}
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.container}>
-          <ImageBackground 
-            source={{ 
+          <ImageBackground
+            source={{
               uri: HEADER_IMAGE,
-              cache: 'force-cache'
-            }} 
+              cache: "force-cache",
+            }}
             style={styles.headerImage}
             resizeMode="cover"
-            imageStyle={{ resizeMode: 'cover' }}>
+            imageStyle={{ resizeMode: "cover" }}
+          >
             <View style={styles.headerOverlay} />
             <View style={styles.logoContainer}>
               <View style={styles.logoMark} />
-              <View>
-                <Text style={styles.logoTextPrimary}>Green</Text>
-                <Text style={styles.logoTextSecondary}>Legacy</Text>
-              </View>
+              <Text style={styles.appName}>Green Legacy</Text>
             </View>
           </ImageBackground>
 
@@ -83,14 +85,20 @@ const SignInScreen = () => {
               {(localError || loginError) && (
                 <View style={styles.errorContainer}>
                   <Text style={styles.errorText}>
-                    {localError || (loginError instanceof ApiError ? loginError.message : 'An error occurred')}
+                    {localError ||
+                      (loginError instanceof ApiError
+                        ? loginError.message
+                        : "An error occurred")}
                   </Text>
                 </View>
               )}
             </View>
 
             <TouchableOpacity
-              style={[styles.primaryButton, isLoggingIn && styles.primaryButtonDisabled]}
+              style={[
+                styles.primaryButton,
+                isLoggingIn && styles.primaryButtonDisabled,
+              ]}
               activeOpacity={0.9}
               disabled={isLoggingIn}
               onPress={() => {
@@ -99,32 +107,33 @@ const SignInScreen = () => {
 
                 // Validate inputs
                 if (!email.trim()) {
-                  setLocalError('Please enter your email address');
+                  setLocalError("Please enter your email address");
                   return;
                 }
 
-                if (!email.includes('@')) {
-                  setLocalError('Please enter a valid email address');
+                if (!email.includes("@")) {
+                  setLocalError("Please enter a valid email address");
                   return;
                 }
 
                 if (!password.trim()) {
-                  setLocalError('Please enter your password');
+                  setLocalError("Please enter your password");
                   return;
                 }
 
                 if (password.length < 6) {
-                  setLocalError('Password must be at least 6 characters');
+                  setLocalError("Password must be at least 6 characters");
                   return;
                 }
 
                 // Attempt login
                 login({ email: email.trim(), password });
-              }}>
+              }}
+            >
               {isLoggingIn ? (
                 <ActivityIndicator color="#FFFFFF" />
               ) : (
-              <Text style={styles.primaryButtonText}>Sign In</Text>
+                <Text style={styles.primaryButtonText}>Sign In</Text>
               )}
             </TouchableOpacity>
 
@@ -149,29 +158,29 @@ export default SignInScreen;
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
   },
   scrollContent: {
     flexGrow: 1,
   },
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
   },
   headerImage: {
-    width: '100%',
+    width: "100%",
     height: 220,
     borderBottomLeftRadius: 40,
     borderBottomRightRadius: 40,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   headerOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.25)',
+    backgroundColor: "rgba(0, 0, 0, 0.25)",
   },
   logoContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginTop: 40,
     marginLeft: 24,
   },
@@ -179,17 +188,15 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     marginRight: 10,
   },
-  logoTextPrimary: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  logoTextSecondary: {
-    color: '#FFFFFF',
-    fontSize: 12,
+  appName: {
+    color: "#FFFFFF",
+    fontSize: 22,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+    display: "none",
   },
   card: {
     marginTop: -40,
@@ -198,8 +205,8 @@ const styles = StyleSheet.create({
     paddingTop: 32,
     paddingBottom: 40,
     borderRadius: 40,
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.08,
     shadowRadius: 16,
@@ -207,8 +214,8 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 32,
-    fontWeight: '700',
-    color: '#2E8B57',
+    fontWeight: "700",
+    color: "#2E8B57",
     marginBottom: 24,
   },
   inputGroup: {
@@ -219,78 +226,76 @@ const styles = StyleSheet.create({
     height: 52,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: "#E0E0E0",
     paddingHorizontal: 16,
     fontSize: 14,
-    color: '#111111',
-    backgroundColor: '#FFFFFF',
+    color: "#111111",
+    backgroundColor: "#FFFFFF",
   },
   primaryButton: {
     height: 54,
     borderRadius: 999,
-    backgroundColor: '#2E8B57',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#2E8B57",
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: 24,
   },
   primaryButtonDisabled: {
     opacity: 0.7,
   },
   primaryButtonText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   inputError: {
-    borderColor: '#FF3B30',
+    borderColor: "#FF3B30",
   },
   errorContainer: {
     marginTop: 8,
     paddingHorizontal: 4,
   },
   errorText: {
-    color: '#FF3B30',
+    color: "#FF3B30",
     fontSize: 12,
   },
   rowBetween: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: 24,
   },
   rememberRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   checkbox: {
     width: 16,
     height: 16,
     borderRadius: 3,
     borderWidth: 1,
-    borderColor: '#A0A0A0',
+    borderColor: "#A0A0A0",
     marginRight: 6,
   },
   checkboxLabel: {
     fontSize: 12,
-    color: '#444444',
+    color: "#444444",
   },
   linkText: {
     fontSize: 12,
-    color: '#666666',
+    color: "#666666",
   },
   footerRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
   },
   footerText: {
     fontSize: 12,
-    color: '#777777',
+    color: "#777777",
   },
   footerLinkText: {
-    fontWeight: '600',
-    color: '#2E8B57',
+    fontWeight: "600",
+    color: "#2E8B57",
   },
 });
-
-

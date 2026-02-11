@@ -25,7 +25,7 @@ export const authService = {
       // Extract the login data from the response
       const loginData: LoginResponse = response.data;
 
-      // Save access token to secure storage (SecureStore - better than localStorage for mobile)
+      // Save access token and expiry to secure storage (SecureStore - better than localStorage for mobile)
       if (loginData.access_token) {
         // Save both tokens
         if (loginData.refresh_token) {
@@ -34,15 +34,20 @@ export const authService = {
             loginData.refresh_token
           );
         } else {
-          // If only access token is provided, save it
           await tokenStorage.saveAccessToken(loginData.access_token);
         }
 
+        // Save token expiry so we can keep user logged in until it expires
+        const expiresInSeconds = loginData.expires_in ?? 24 * 60 * 60; // default 24h if API omits it
+        const expiresAtMs = Date.now() + expiresInSeconds * 1000;
+        await tokenStorage.saveTokenExpiry(expiresAtMs);
+
         // Set token in API client for immediate use
         apiClient.setAuthToken(loginData.access_token);
-        
+        apiClient.setTokenExpiry(expiresAtMs);
+
         if (__DEV__) {
-          console.log('✅ Access token saved to secure storage');
+          console.log('✅ Access token and expiry saved to secure storage');
         }
       } else {
         console.warn('⚠️ No access_token received in login response');
@@ -89,10 +94,23 @@ export const authService = {
   },
 
   /**
-   * Check if user is authenticated
+   * Check if user is authenticated (has valid, non-expired token).
+   * If token is expired, clears storage and returns false.
+   * When valid, syncs token and expiry to apiClient so requests are authenticated.
    */
   async isAuthenticated(): Promise<boolean> {
-    const token = await tokenStorage.getAccessToken();
-    return !!token;
+    const [token, expiry] = await Promise.all([
+      tokenStorage.getAccessToken(),
+      tokenStorage.getTokenExpiry(),
+    ]);
+    if (!token) return false;
+    const expired = expiry != null && Date.now() >= expiry;
+    if (expired) {
+      await this.logout();
+      return false;
+    }
+    apiClient.setAuthToken(token);
+    apiClient.setTokenExpiry(expiry);
+    return true;
   },
 };

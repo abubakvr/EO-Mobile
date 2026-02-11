@@ -77,7 +77,6 @@ export default function ScheduleScreen() {
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <Text style={styles.title}>Task List</Text>
-          <Text style={styles.breadcrumb}>Home/Tasks</Text>
         </View>
         <View style={styles.headerRight}>
           <TouchableOpacity style={styles.iconButton}>

@@ -21,11 +21,13 @@ const SignUpScreen = () => {
   return (
     <KeyboardAvoidingView
       style={styles.root}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      behavior="padding"
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         bounces={false}
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled">
         <View style={styles.container}>
           <ImageBackground 
             source={{ 

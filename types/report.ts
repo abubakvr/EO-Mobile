@@ -39,6 +39,26 @@ export interface ReportTree {
   updated_at: string;
 }
 
+/** Optional payload for growth-stage (growth check) reports */
+export interface ReportGrowthStagePayload {
+  soil_condition?: string;
+  soil_fertility?: string;
+  moisture_content?: string;
+  ph_value?: string;
+  temperature?: string;
+  sunlight?: string;
+  humidity?: string;
+  broken_branch?: string;
+  damaged_bark?: string;
+  bent_stem?: string;
+  root_exposure?: string;
+  roots_exposure?: string;
+  odor?: string;
+  additional_comments?: string;
+  leaf_image_url?: string;
+  stem_image_url?: string;
+}
+
 export interface Report {
   id: number;
   report_type: string;
@@ -59,6 +79,23 @@ export interface Report {
   tree: ReportTree;
   created_at: string;
   updated_at: string;
+  /** Growth-stage (growth check) specific fields; may be at top level or inside location_metadata */
+  soil_condition?: string;
+  soil_fertility?: string;
+  moisture_content?: string;
+  ph_value?: string;
+  temperature?: string;
+  sunlight?: string;
+  humidity?: string;
+  broken_branch?: string;
+  damaged_bark?: string;
+  bent_stem?: string;
+  root_exposure?: string;
+  roots_exposure?: string;
+  odor?: string;
+  additional_comments?: string;
+  leaf_image_url?: string;
+  stem_image_url?: string;
 }
 
 export interface ReportsResponse {

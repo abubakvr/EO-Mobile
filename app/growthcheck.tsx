@@ -1107,13 +1107,10 @@ export default function GrowthCheckScreen() {
           </TouchableOpacity>
           <View style={styles.headerTitleContainer}>
             {viewMode === 'incidentReport' ? (
-              <>
-                <Text style={styles.headerTitle}>Schedule/</Text>
-                <Text style={[styles.headerTitle, styles.headerTitleHighlight]}>Report Incident</Text>
-              </>
+              <Text style={[styles.headerTitle, styles.headerTitleHighlight]}>Report Incident</Text>
             ) : (
               <Text style={styles.headerTitle} numberOfLines={1}>
-                {getBreadcrumb()}
+                Growth Check
               </Text>
             )}
           </View>
@@ -1130,7 +1127,7 @@ export default function GrowthCheckScreen() {
 
       <KeyboardAvoidingView
         style={styles.keyboardView}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="padding"
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}>
         <ScrollView
           style={styles.scrollView}

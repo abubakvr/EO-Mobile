@@ -5,7 +5,7 @@ import { tokenStorage } from './tokenStorage';
  * API Client Configuration
  * Configure your base URL and default settings here
  */
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'https://api.example.com';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'https://dev.greenlegacy.ng';
 
 /**
  * Custom error class for API errors
@@ -45,6 +45,7 @@ export interface RequestConfig extends AxiosRequestConfig {
 class ApiClient {
   private client: AxiosInstance;
   private accessToken: string | null = null;
+  private tokenExpiryMs: number | null = null;
   private onUnauthorizedCallback?: () => void;
 
   constructor() {
@@ -64,15 +65,24 @@ class ApiClient {
   }
 
   /**
-   * Load token from secure storage on initialization
+   * Load token and expiry from secure storage on initialization.
+   * If token is expired, clears storage and does not set token.
    */
   private async loadTokenFromStorage(): Promise<void> {
     try {
-      const token = await tokenStorage.getAccessToken();
-      if (token) {
-        this.accessToken = token;
-        this.setAuthToken(token);
+      const [token, expiry] = await Promise.all([
+        tokenStorage.getAccessToken(),
+        tokenStorage.getTokenExpiry(),
+      ]);
+      if (!token) return;
+      const expired = expiry != null && Date.now() >= expiry;
+      if (expired) {
+        await tokenStorage.clearTokens();
+        return;
       }
+      this.accessToken = token;
+      this.tokenExpiryMs = expiry;
+      this.setAuthToken(token);
     } catch (error) {
       console.error('Failed to load token from storage:', error);
     }
@@ -108,15 +118,18 @@ class ApiClient {
         
         // Handle authentication token
         if (skipAuth) {
-          // Explicitly remove Authorization header for endpoints that should skip auth
           delete config.headers.Authorization;
         } else {
-          // Add authentication token if available
+          // Use token only if present and not expired; otherwise clear and trigger logout
           const token = this.getAuthToken();
+          const expired = this.tokenExpiryMs != null && Date.now() >= this.tokenExpiryMs;
+          if (expired && token) {
+            this.handleUnauthorized().catch(console.error);
+            return Promise.reject(new ApiError('Session expired. Please sign in again.', 401));
+          }
           if (token) {
             config.headers.Authorization = `Bearer ${token}`;
           } else {
-            // Remove Authorization header if no token available
             delete config.headers.Authorization;
           }
         }
@@ -263,18 +276,24 @@ class ApiClient {
   }
 
   /**
-   * Handle unauthorized access
+   * Handle unauthorized access (expired or 401)
    */
   private async handleUnauthorized(): Promise<void> {
-    // Clear tokens
     this.accessToken = null;
+    this.tokenExpiryMs = null;
     this.setAuthToken(null);
     await tokenStorage.clearTokens();
 
-    // Call unauthorized callback if set
     if (this.onUnauthorizedCallback) {
       this.onUnauthorizedCallback();
     }
+  }
+
+  /**
+   * Set token expiry (ms since epoch). Used after login so requests can check before sending.
+   */
+  setTokenExpiry(expiresAtMs: number | null): void {
+    this.tokenExpiryMs = expiresAtMs;
   }
 
   /**
@@ -377,10 +396,8 @@ class ApiClient {
    */
   setAuthToken(token: string | null): void {
     this.accessToken = token;
-    // Don't set in defaults.headers.common - let the interceptor handle it per-request
-    // This allows us to skip auth for login/signup endpoints
     if (!token) {
-      // Only remove from defaults if token is cleared
+      this.tokenExpiryMs = null;
       delete this.client.defaults.headers.common.Authorization;
     }
   }

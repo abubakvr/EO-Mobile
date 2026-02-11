@@ -2,6 +2,7 @@ import * as SecureStore from 'expo-secure-store';
 
 const ACCESS_TOKEN_KEY = 'access_token';
 const REFRESH_TOKEN_KEY = 'refresh_token';
+const TOKEN_EXPIRY_KEY = 'token_expiry';
 const USER_NAME_KEY = 'user_name';
 const USER_WARD_KEY = 'user_ward';
 
@@ -71,6 +72,42 @@ export const tokenStorage = {
   },
 
   /**
+   * Save token expiry timestamp (milliseconds since epoch).
+   * Used to keep user logged in until expiry; clear and log out when expired.
+   */
+  async saveTokenExpiry(expiresAtMs: number): Promise<void> {
+    try {
+      await SecureStore.setItemAsync(TOKEN_EXPIRY_KEY, String(expiresAtMs));
+    } catch (error) {
+      console.warn('Failed to save token expiry:', error);
+    }
+  },
+
+  /**
+   * Get token expiry timestamp (milliseconds), or null if not set.
+   */
+  async getTokenExpiry(): Promise<number | null> {
+    try {
+      const value = await SecureStore.getItemAsync(TOKEN_EXPIRY_KEY);
+      if (value == null) return null;
+      const n = parseInt(value, 10);
+      return Number.isFinite(n) ? n : null;
+    } catch (error) {
+      console.warn('Failed to get token expiry:', error);
+      return null;
+    }
+  },
+
+  /**
+   * Check if the stored token is expired (or missing expiry = treat as not expired for backward compat).
+   */
+  async isTokenExpired(): Promise<boolean> {
+    const expiresAt = await this.getTokenExpiry();
+    if (expiresAt == null) return false;
+    return Date.now() >= expiresAt;
+  },
+
+  /**
    * Save user name
    */
   async saveUserName(name: string): Promise<void> {
@@ -136,6 +173,7 @@ export const tokenStorage = {
       await Promise.all([
         SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY),
         SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY),
+        SecureStore.deleteItemAsync(TOKEN_EXPIRY_KEY),
         SecureStore.deleteItemAsync(USER_NAME_KEY),
         SecureStore.deleteItemAsync(USER_WARD_KEY),
       ]);
