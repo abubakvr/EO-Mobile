@@ -3,7 +3,6 @@ import { useSpeciesList } from "@/hooks/useSpecies";
 import { getSpeciesImageSource } from "@/utils/speciesImageMapper";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React from "react";
 import {
   ActivityIndicator,
   Image,
@@ -32,7 +31,7 @@ export default function TreeListScreen() {
     return param || defaultValue;
   };
 
-  // Get preserved task data from params
+  // Get preserved task data and location from params (so selecting a specie doesn't reset location)
   const preservedParams = {
     taskId: getStringParam(params.taskId),
     treeId: getStringParam(params.treeId),
@@ -43,6 +42,8 @@ export default function TreeListScreen() {
     custodianPhone: getStringParam(params.custodianPhone),
     custodianId: getStringParam(params.custodianId),
     returnPath: getStringParam(params.returnPath, "/validate"),
+    locationLat: getStringParam(params.locationLat),
+    locationLng: getStringParam(params.locationLng),
   };
 
   return (

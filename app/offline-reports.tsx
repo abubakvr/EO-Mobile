@@ -1,3 +1,5 @@
+import { useAuth } from '@/hooks/useAuth';
+import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { getHumanReadableError, getSyncErrorMessage } from '@/utils/errorHandler';
 import { submissionQueue, QueuedSubmission } from '@/services/submissionQueue';
 import { syncQueuedSubmissions } from '@/services/submissionSync';
@@ -9,6 +11,7 @@ import {
   Alert,
   RefreshControl,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -18,6 +21,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function OfflineReportsScreen() {
   const router = useRouter();
+  const { logout } = useAuth();
+  const { isOnline } = useNetworkStatus();
   const [queuedSubmissions, setQueuedSubmissions] = useState<QueuedSubmission[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -147,13 +152,26 @@ export default function OfflineReportsScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <StatusBar barStyle="dark-content" backgroundColor="#F5F5F5" />
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#000" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Offline Reports</Text>
-          <View style={styles.headerRight} />
+          <View style={styles.headerLeft}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+              <Ionicons name="arrow-back" size={24} color="#000" />
+            </TouchableOpacity>
+            <View style={styles.headerTitleContainer}>
+              <Text style={styles.headerTitle}>Offline Reports</Text>
+            </View>
+          </View>
+          <View style={styles.headerRight}>
+            <TouchableOpacity style={styles.iconButton}>
+              <Ionicons name="notifications-outline" size={24} color="#000" />
+            </TouchableOpacity>
+            <View style={[styles.networkIndicator, isOnline ? styles.networkIndicatorOnline : styles.networkIndicatorOffline]} />
+            <TouchableOpacity onPress={() => logout()}>
+              <Text style={styles.signOutText}>Sign Out</Text>
+            </TouchableOpacity>
+          </View>
         </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#2E8B57" />
@@ -164,14 +182,27 @@ export default function OfflineReportsScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <StatusBar barStyle="dark-content" backgroundColor="#F5F5F5" />
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#000" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Offline Reports</Text>
-        <View style={styles.headerRight} />
+        <View style={styles.headerLeft}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#000" />
+          </TouchableOpacity>
+          <View style={styles.headerTitleContainer}>
+            <Text style={styles.headerTitle}>Offline Reports</Text>
+          </View>
+        </View>
+        <View style={styles.headerRight}>
+          <TouchableOpacity style={styles.iconButton}>
+            <Ionicons name="notifications-outline" size={24} color="#000" />
+          </TouchableOpacity>
+          <View style={[styles.networkIndicator, isOnline ? styles.networkIndicatorOnline : styles.networkIndicatorOffline]} />
+          <TouchableOpacity onPress={() => logout()}>
+            <Text style={styles.signOutText}>Sign Out</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Sync All Button */}
@@ -244,6 +275,12 @@ export default function OfflineReportsScreen() {
                     </Text>
                   </View>
                 )}
+                {submission.lastSyncError && (
+                  <View style={styles.syncErrorBadge}>
+                    <Ionicons name="alert-circle-outline" size={16} color="#F44336" />
+                    <Text style={styles.syncErrorText}>{submission.lastSyncError}</Text>
+                  </View>
+                )}
                 {submission.retryCount >= 5 && (
                   <View style={styles.errorBadge}>
                     <Ionicons name="warning-outline" size={16} color="#F44336" />
@@ -266,24 +303,61 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+    paddingVertical: 20,
+    backgroundColor: '#F5F5F5',
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 12,
   },
   backButton: {
-    padding: 4,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  headerTitleContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '500',
     color: '#000',
   },
   headerRight: {
-    width: 32,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  iconButton: {
+    padding: 4,
+  },
+  signOutText: {
+    fontSize: 12,
+    color: '#000',
+    fontWeight: '500',
+  },
+  networkIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginHorizontal: 8,
+  },
+  networkIndicatorOnline: {
+    backgroundColor: '#2E8B57',
+  },
+  networkIndicatorOffline: {
+    backgroundColor: '#F44336',
   },
   loadingContainer: {
     flex: 1,
@@ -296,10 +370,9 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   syncContainer: {
-    padding: 16,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: '#F5F5F5',
   },
   syncButton: {
     flexDirection: 'row',
@@ -326,7 +399,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: 16,
+    paddingHorizontal: 20,
+    paddingBottom: 40,
   },
   emptyContainer: {
     flex: 1,
@@ -428,5 +502,21 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#F44336',
     fontWeight: '500',
+  },
+  syncErrorBadge: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FFEBEE',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    gap: 8,
+    marginTop: 8,
+  },
+  syncErrorText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#C62828',
+    lineHeight: 18,
   },
 });

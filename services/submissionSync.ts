@@ -81,10 +81,11 @@ async function submitQueuedSubmission(submission: QueuedSubmission): Promise<{ s
       console.error('[SubmissionSync] Error syncing submission:', submission.id, errorMessage);
     }
     
-    // Increment retry count
+    // Increment retry count and store error for display on offline reports card
     const newRetryCount = submission.retryCount + 1;
     try {
       await submissionQueue.updateRetryCount(submission.id, newRetryCount);
+      await submissionQueue.updateSubmissionError(submission.id, errorMessage);
     } catch (updateError: any) {
       if (__DEV__) {
         console.error('[SubmissionSync] Error updating retry count:', updateError);

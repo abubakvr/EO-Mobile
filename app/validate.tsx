@@ -1,15 +1,19 @@
-import SuccessScreen from '@/components/SuccessScreen';
-import { reportService } from '@/services/reportService';
-import { SubmissionData, submitWithOfflineSupport } from '@/services/submitWithOfflineSupport';
-import { modifyLeafletHtmlForOffline } from '@/utils/mapHtmlModifier';
-import { Ionicons } from '@expo/vector-icons';
-import { Asset } from 'expo-asset';
-import { File } from 'expo-file-system';
-import * as ImagePicker from 'expo-image-picker';
-import * as Location from 'expo-location';
-import { useAuth } from '@/hooks/useAuth';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import SuccessScreen from "@/components/SuccessScreen";
+import { useAuth } from "@/hooks/useAuth";
+import { reportService } from "@/services/reportService";
+import {
+  SubmissionData,
+  submitWithOfflineSupport,
+} from "@/services/submitWithOfflineSupport";
+import { compressImageToMaxSize } from "@/utils/imageCompression";
+import { modifyLeafletHtmlForOffline } from "@/utils/mapHtmlModifier";
+import { Ionicons } from "@expo/vector-icons";
+import { Asset } from "expo-asset";
+import { File } from "expo-file-system";
+import * as ImagePicker from "expo-image-picker";
+import * as Location from "expo-location";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -22,10 +26,10 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View
-} from 'react-native';
-import { LeafletView } from 'react-native-leaflet-view';
-import { SafeAreaView } from 'react-native-safe-area-context';
+  View,
+} from "react-native";
+import { LeafletView } from "react-native-leaflet-view";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 const DEFAULT_MAP_LOCATION = {
   latitude: 1.343434,
@@ -37,13 +41,16 @@ export default function ValidateTreeScreen() {
   const params = useLocalSearchParams();
   const { logout } = useAuth();
   const [webViewContent, setWebViewContent] = useState<string | null>(null);
-  
+
   // Helper to get string param value
-  const getStringParam = (param: string | string[] | undefined, defaultValue: string = ''): string => {
+  const getStringParam = (
+    param: string | string[] | undefined,
+    defaultValue: string = "",
+  ): string => {
     if (Array.isArray(param)) return param[0] || defaultValue;
     return param || defaultValue;
   };
-  
+
   // Store task data in state to persist across re-renders
   const [taskData, setTaskData] = useState(() => ({
     treeCode: getStringParam(params.treeCode),
@@ -55,7 +62,7 @@ export default function ValidateTreeScreen() {
     treeId: getStringParam(params.treeId),
     custodianId: getStringParam(params.custodianId),
   }));
-  
+
   // Get selected specie from route params or use default
   const getInitialSpecie = (): string => {
     // First check for speciesName from task data
@@ -66,21 +73,21 @@ export default function ValidateTreeScreen() {
     }
     // Fallback to stored task data
     if (taskData.speciesName) return taskData.speciesName;
-    return 'Mango';
+    return "Mango";
   };
-  
+
   const [selectedSpecies, setSelectedSpecies] = useState(getInitialSpecie());
-  const [accessibility, setAccessibility] = useState<'yes' | 'no'>('yes');
-  const [accessibilityReason, setAccessibilityReason] = useState('');
-  const [showSpeciesDropdown, setShowSpeciesDropdown] = useState(false);
-  const [currentLocation, setCurrentLocation] = useState(DEFAULT_MAP_LOCATION);
-  const [locationAccuracy, setLocationAccuracy] = useState<string>('');
-  const [locationObject, setLocationObject] = useState<Location.LocationObject | null>(null);
+  const [accessibility, setAccessibility] = useState<"yes" | "no">("yes");
+  const [accessibilityReason, setAccessibilityReason] = useState("");
+  const [currentLocation, setCurrentLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [locationAccuracy, setLocationAccuracy] = useState<string>("");
+  const [locationObject, setLocationObject] =
+    useState<Location.LocationObject | null>(null);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [treeImage, setTreeImage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccessScreen, setShowSuccessScreen] = useState(false);
-  
+
   // Update task data when params change (but preserve existing values if params are empty)
   useEffect(() => {
     const newTreeCode = getStringParam(params.treeCode);
@@ -91,9 +98,9 @@ export default function ValidateTreeScreen() {
     const newTaskId = getStringParam(params.taskId);
     const newTreeId = getStringParam(params.treeId);
     const newCustodianId = getStringParam(params.custodianId);
-    
+
     // Only update if we have new values (preserve existing state)
-    setTaskData(prev => ({
+    setTaskData((prev) => ({
       treeCode: newTreeCode || prev.treeCode,
       speciesName: newSpeciesName || prev.speciesName,
       speciesId: newSpeciesId || prev.speciesId,
@@ -114,17 +121,32 @@ export default function ValidateTreeScreen() {
     params.custodianId,
   ]);
 
+  // Restore location when returning from species picker
+  useEffect(() => {
+    const lat = getStringParam(params.locationLat);
+    const lng = getStringParam(params.locationLng);
+    if (lat && lng) {
+      const latNum = parseFloat(lat);
+      const lngNum = parseFloat(lng);
+      if (!Number.isNaN(latNum) && !Number.isNaN(lngNum)) {
+        setCurrentLocation({ latitude: latNum, longitude: lngNum });
+      }
+    }
+  }, [params.locationLat, params.locationLng]);
+
+  const mapCenter = currentLocation ?? DEFAULT_MAP_LOCATION;
+
   useEffect(() => {
     let isMounted = true;
 
     const loadHtml = async () => {
       try {
-        const path = require('../assets/leaflet.html');
+        const path = require("../assets/leaflet.html");
         const asset = Asset.fromModule(path);
         await asset.downloadAsync();
 
         if (!asset.localUri) {
-          throw new Error('Asset localUri is null');
+          throw new Error("Asset localUri is null");
         }
 
         const file = new File(asset.localUri);
@@ -137,7 +159,7 @@ export default function ValidateTreeScreen() {
           setWebViewContent(htmlContent);
         }
       } catch (error) {
-        console.error('Error loading HTML:', error);
+        console.error("Error loading HTML:", error);
       }
     };
 
@@ -158,7 +180,7 @@ export default function ValidateTreeScreen() {
         setSelectedSpecies(specie);
         // Also update task data if speciesName changed
         if (params.speciesName) {
-          setTaskData(prev => ({ ...prev, speciesName: specie }));
+          setTaskData((prev) => ({ ...prev, speciesName: specie }));
         }
       }
     } else if (taskData.speciesName) {
@@ -173,7 +195,7 @@ export default function ValidateTreeScreen() {
       try {
         // Check if we already have permission
         const { status } = await Location.getForegroundPermissionsAsync();
-        if (status === 'granted') {
+        if (status === "granted") {
           // Silently try to get location without showing alerts
           const enabled = await Location.hasServicesEnabledAsync();
           if (enabled) {
@@ -182,7 +204,11 @@ export default function ValidateTreeScreen() {
               const location = await Location.getCurrentPositionAsync({
                 accuracy: Location.Accuracy.Lowest,
               });
-              if (location?.coords && location.coords.latitude && location.coords.longitude) {
+              if (
+                location?.coords &&
+                location.coords.latitude &&
+                location.coords.longitude
+              ) {
                 setCurrentLocation({
                   latitude: location.coords.latitude,
                   longitude: location.coords.longitude,
@@ -191,15 +217,18 @@ export default function ValidateTreeScreen() {
             } catch (error: any) {
               // Silently fail - user can manually request location
               // Only log if it's not a common "unavailable" error
-              if (error.code !== 'UNAVAILABLE' && !error.message?.includes('unavailable')) {
-                console.log('Auto-location fetch failed:', error);
+              if (
+                error.code !== "UNAVAILABLE" &&
+                !error.message?.includes("unavailable")
+              ) {
+                console.log("Auto-location fetch failed:", error);
               }
             }
           }
         }
       } catch (error) {
         // Silently fail - user can manually request location
-        console.log('Auto-location permission check failed:', error);
+        console.log("Auto-location permission check failed:", error);
       }
     };
 
@@ -214,10 +243,10 @@ export default function ValidateTreeScreen() {
 
       // Request permissions
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
+      if (status !== "granted") {
         Alert.alert(
-          'Permission Denied',
-          'Location permission is required to validate the actual location. Please enable it in your device settings.',
+          "Permission Denied",
+          "Location permission is required to validate the actual location. Please enable it in your device settings.",
         );
         setIsGettingLocation(false);
         return;
@@ -227,8 +256,8 @@ export default function ValidateTreeScreen() {
       const enabled = await Location.hasServicesEnabledAsync();
       if (!enabled) {
         Alert.alert(
-          'Location Services Disabled',
-          'Please enable location services in your device settings.',
+          "Location Services Disabled",
+          "Please enable location services in your device settings.",
         );
         setIsGettingLocation(false);
         return;
@@ -237,7 +266,7 @@ export default function ValidateTreeScreen() {
       // Get current position with better options
       // Try with lower accuracy first for faster response, then fallback to higher accuracy if needed
       let location: Location.LocationObject;
-      
+
       try {
         // First try with lower accuracy for faster response
         location = await Location.getCurrentPositionAsync({
@@ -245,14 +274,14 @@ export default function ValidateTreeScreen() {
         });
       } catch (error: any) {
         // If low accuracy fails, try balanced accuracy
-        console.log('Low accuracy failed, trying balanced:', error);
+        console.log("Low accuracy failed, trying balanced:", error);
         try {
           location = await Location.getCurrentPositionAsync({
             accuracy: Location.Accuracy.Balanced,
           });
         } catch (error2: any) {
           // If balanced fails, try with any available accuracy
-          console.log('Balanced accuracy failed, trying lowest:', error2);
+          console.log("Balanced accuracy failed, trying lowest:", error2);
           location = await Location.getCurrentPositionAsync({
             accuracy: Location.Accuracy.Lowest,
           });
@@ -261,7 +290,7 @@ export default function ValidateTreeScreen() {
 
       // Validate location data
       if (!location || !location.coords) {
-        throw new Error('Invalid location data received');
+        throw new Error("Invalid location data received");
       }
 
       const newLocation = {
@@ -276,7 +305,7 @@ export default function ValidateTreeScreen() {
         newLocation.latitude === 0 ||
         newLocation.longitude === 0
       ) {
-        throw new Error('Invalid coordinates received');
+        throw new Error("Invalid coordinates received");
       }
 
       setCurrentLocation(newLocation);
@@ -287,25 +316,33 @@ export default function ValidateTreeScreen() {
       }
       setIsGettingLocation(false);
 
-      Alert.alert('Success', 'Location updated successfully!');
+      Alert.alert("Success", "Location updated successfully!");
     } catch (error: any) {
-      console.error('Error getting location:', error);
-      
-      let errorMessage = 'Failed to get your location. Please try again.';
-      
-      if (error.code === 'TIMEOUT' || error.message?.includes('timeout')) {
-        errorMessage = 'Location request timed out. Please ensure you are in an area with good GPS signal and try again.';
-      } else if (error.code === 'UNAVAILABLE' || error.message?.includes('unavailable') || error.message?.includes('Make sure that location services are enabled')) {
-        errorMessage = 'Location services are currently unavailable. Please:\n\n1. Enable location services in your device settings\n2. Make sure GPS is enabled\n3. Try moving to an area with better GPS signal\n4. Wait a few seconds and try again';
-      } else if (error.code === 'PERMISSION_DENIED') {
-        errorMessage = 'Location permission was denied. Please enable location access in your device settings.';
+      console.error("Error getting location:", error);
+
+      let errorMessage = "Failed to get your location. Please try again.";
+
+      if (error.code === "TIMEOUT" || error.message?.includes("timeout")) {
+        errorMessage =
+          "Location request timed out. Please ensure you are in an area with good GPS signal and try again.";
+      } else if (
+        error.code === "UNAVAILABLE" ||
+        error.message?.includes("unavailable") ||
+        error.message?.includes("Make sure that location services are enabled")
+      ) {
+        errorMessage =
+          "Location services are currently unavailable. Please:\n\n1. Enable location services in your device settings\n2. Make sure GPS is enabled\n3. Try moving to an area with better GPS signal\n4. Wait a few seconds and try again";
+      } else if (error.code === "PERMISSION_DENIED") {
+        errorMessage =
+          "Location permission was denied. Please enable location access in your device settings.";
       } else if (error.message) {
         errorMessage = `Error: ${error.message}`;
       }
-      
+
       Alert.alert(
-        'Location Error',
-        errorMessage + '\n\nTips:\n- Make sure location services are enabled\n- Try moving to an area with better GPS signal\n- Check that the app has location permissions',
+        "Location Error",
+        errorMessage +
+          "\n\nTips:\n- Make sure location services are enabled\n- Try moving to an area with better GPS signal\n- Check that the app has location permissions",
       );
       setIsGettingLocation(false);
     }
@@ -315,10 +352,10 @@ export default function ValidateTreeScreen() {
     try {
       // Request camera permissions
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      if (status !== 'granted') {
+      if (status !== "granted") {
         Alert.alert(
-          'Permission Denied',
-          'Camera permission is required to capture tree photos.',
+          "Permission Denied",
+          "Camera permission is required to capture tree photos.",
         );
         return;
       }
@@ -331,11 +368,17 @@ export default function ValidateTreeScreen() {
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        setTreeImage(result.assets[0].uri);
+        try {
+          const uri = await compressImageToMaxSize(result.assets[0].uri);
+          setTreeImage(uri);
+        } catch (e) {
+          if (__DEV__) console.warn('Image compression failed, using original:', e);
+          setTreeImage(result.assets[0].uri);
+        }
       }
     } catch (error) {
-      console.error('Error capturing photo:', error);
-      Alert.alert('Error', 'Failed to capture photo. Please try again.');
+      console.error("Error capturing photo:", error);
+      Alert.alert("Error", "Failed to capture photo. Please try again.");
     }
   };
 
@@ -343,28 +386,45 @@ export default function ValidateTreeScreen() {
     try {
       // Validation
       if (!treeImage) {
-        Alert.alert('Error', 'Please capture a tree photo before submitting.');
+        Alert.alert("Error", "Please capture a tree photo before submitting.");
         return;
       }
 
       if (!taskData.treeId) {
-        Alert.alert('Error', 'Tree ID is missing. Please go back and try again.');
+        Alert.alert(
+          "Error",
+          "Tree ID is missing. Please go back and try again.",
+        );
         return;
       }
 
       if (!taskData.speciesId) {
-        Alert.alert('Error', 'Species ID is missing. Please select a species.');
+        Alert.alert("Error", "Species ID is missing. Please select a species.");
         return;
       }
 
       if (!taskData.taskId) {
-        Alert.alert('Error', 'Task ID is missing. Please go back and try again.');
+        Alert.alert(
+          "Error",
+          "Task ID is missing. Please go back and try again.",
+        );
+        return;
+      }
+
+      if (!currentLocation) {
+        Alert.alert(
+          "Error",
+          "Please set your current location before submitting.",
+        );
         return;
       }
 
       // Validate accessibility comment if accessibility is "no"
-      if (accessibility === 'no' && !accessibilityReason.trim()) {
-        Alert.alert('Error', 'Please provide a comment explaining why the tree is not accessible.');
+      if (accessibility === "no" && !accessibilityReason.trim()) {
+        Alert.alert(
+          "Error",
+          "Please provide a comment explaining why the tree is not accessible.",
+        );
         return;
       }
 
@@ -372,26 +432,38 @@ export default function ValidateTreeScreen() {
 
       // Prepare image file data
       const imageUri = treeImage;
-      const filename = imageUri.split('/').pop() || 'tree-photo.jpg';
+      const filename = imageUri.split("/").pop() || "tree-photo.jpg";
       const match = /\.(\w+)$/.exec(filename);
-      const imageType = match ? `image/${match[1]}` : 'image/jpeg';
+      const imageType = match ? `image/${match[1]}` : "image/jpeg";
 
       // Build location metadata
       const locationMetadata: any = {
         timestamp: new Date().toISOString(),
       };
-      
+
       if (locationObject?.coords) {
-        if (locationObject.coords.accuracy !== null && locationObject.coords.accuracy !== undefined) {
+        if (
+          locationObject.coords.accuracy !== null &&
+          locationObject.coords.accuracy !== undefined
+        ) {
           locationMetadata.accuracy = locationObject.coords.accuracy;
         }
-        if (locationObject.coords.altitude !== null && locationObject.coords.altitude !== undefined) {
+        if (
+          locationObject.coords.altitude !== null &&
+          locationObject.coords.altitude !== undefined
+        ) {
           locationMetadata.altitude = locationObject.coords.altitude;
         }
-        if (locationObject.coords.heading !== null && locationObject.coords.heading !== undefined) {
+        if (
+          locationObject.coords.heading !== null &&
+          locationObject.coords.heading !== undefined
+        ) {
           locationMetadata.heading = locationObject.coords.heading;
         }
-        if (locationObject.coords.speed !== null && locationObject.coords.speed !== undefined) {
+        if (
+          locationObject.coords.speed !== null &&
+          locationObject.coords.speed !== undefined
+        ) {
           locationMetadata.speed = locationObject.coords.speed;
         }
       }
@@ -406,14 +478,14 @@ export default function ValidateTreeScreen() {
         tree_id: taskData.treeId,
         task_id: taskData.taskId,
         species_id: taskData.speciesId,
-        is_accessible: accessibility === 'yes' ? 'true' : 'false',
+        is_accessible: accessibility === "yes" ? "true" : "false",
         latitude: currentLocation.latitude.toString(),
         longitude: currentLocation.longitude.toString(),
         location_metadata: JSON.stringify(locationMetadata),
       };
 
       // Add optional fields
-      if (accessibility === 'no') {
+      if (accessibility === "no") {
         submissionData.accessibility_reason = accessibilityReason;
       }
 
@@ -431,11 +503,11 @@ export default function ValidateTreeScreen() {
 
       // Log submission data in development
       if (__DEV__) {
-        console.log('[Validate] Submitting form with:', {
+        console.log("[Validate] Submitting form with:", {
           treeId: taskData.treeId,
           taskId: taskData.taskId,
           speciesId: taskData.speciesId,
-          isAccessible: accessibility === 'yes',
+          isAccessible: accessibility === "yes",
           latitude: currentLocation.latitude,
           longitude: currentLocation.longitude,
           hasImage: !!treeImage,
@@ -444,10 +516,10 @@ export default function ValidateTreeScreen() {
 
       // Submit with offline support
       const result = await submitWithOfflineSupport(
-        'validate',
-        '/api/reports/validation',
+        "validate",
+        "/api/reports/validation",
         submissionData,
-        (formData) => reportService.validateTree(formData)
+        (formData) => reportService.validateTree(formData),
       );
 
       setIsSubmitting(false);
@@ -455,30 +527,33 @@ export default function ValidateTreeScreen() {
       if (result.success) {
         if (result.queued) {
           Alert.alert(
-            'Queued for Sync',
-            result.message || 'Your submission has been queued and will sync when online.',
+            "Queued for Sync",
+            result.message ||
+              "Your submission has been queued and will sync when online.",
             [
               {
-                text: 'OK',
+                text: "OK",
                 onPress: () => {
                   setShowSuccessScreen(true);
                 },
               },
-            ]
+            ],
           );
         } else {
           setShowSuccessScreen(true);
         }
       } else {
-        const errorMessage = result.message || 'Failed to submit. Please try again.';
-        Alert.alert('Error', errorMessage);
+        const errorMessage =
+          result.message || "Failed to submit. Please try again.";
+        Alert.alert("Error", errorMessage);
       }
     } catch (error: any) {
       setIsSubmitting(false);
-      console.error('Error submitting validation:', error);
-      
-      const errorMessage = error.message || 'Failed to validate tree. Please try again.';
-      Alert.alert('Error', errorMessage);
+      console.error("Error submitting validation:", error);
+
+      const errorMessage =
+        error.message || "Failed to validate tree. Please try again.";
+      Alert.alert("Error", errorMessage);
     }
   };
 
@@ -488,19 +563,22 @@ export default function ValidateTreeScreen() {
       <SuccessScreen
         taskName="Validate Tree"
         message="Has Successfully been sent!"
-        onDone={() => router.replace('/(tabs)')}
+        onDone={() => router.replace("/(tabs)")}
       />
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
       <StatusBar barStyle="dark-content" backgroundColor="#F5F5F5" />
 
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.backButton}
+          >
             <Ionicons name="arrow-back" size={24} color="#000" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Validate</Text>
@@ -517,197 +595,269 @@ export default function ValidateTreeScreen() {
 
       <KeyboardAvoidingView
         style={styles.keyboardView}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}>
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled">
-        {/* Tree ID Section */}
-        {/* <View style={styles.treeIdSection}>
+        behavior={Platform.OS === "ios" ? "padding" : "padding"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+      >
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Tree ID Section */}
+          {/* <View style={styles.treeIdSection}>
           <Text style={styles.treeIdText}>TreeID/{taskData.treeCode || 'N/A'}</Text>
         </View> */}
 
-        {/* Map Section */}
-        <View style={styles.mapContainer}>
-          {!webViewContent ? (
-            <View style={[styles.map, styles.loadingContainer]}>
-              <Text style={styles.loadingText}>Loading map...</Text>
+          {/* Map Section */}
+          <View style={styles.mapContainer}>
+            {!webViewContent ? (
+              <View style={[styles.map, styles.loadingContainer]}>
+                <Text style={styles.loadingText}>Loading map...</Text>
+              </View>
+            ) : (
+              <View style={styles.map}>
+                <LeafletView
+                  source={{ html: webViewContent }}
+                  mapCenterPosition={{
+                    lat: mapCenter.latitude,
+                    lng: mapCenter.longitude,
+                  }}
+                  zoom={15}
+                  mapMarkers={
+                    currentLocation
+                      ? [
+                          {
+                            id: "1",
+                            position: {
+                              lat: currentLocation.latitude,
+                              lng: currentLocation.longitude,
+                            },
+                            icon: "📍",
+                            size: [40, 40],
+                          },
+                        ]
+                      : []
+                  }
+                  zoomControl={true}
+                  attributionControl={true}
+                  doDebug={false}
+                  key={currentLocation ? `${currentLocation.latitude}-${currentLocation.longitude}` : "unset"}
+                />
+              </View>
+            )}
+          </View>
+
+          {/* Validate Location Button and Coordinates */}
+          <View style={styles.locationSection}>
+            <TouchableOpacity
+              style={[
+                styles.validateLocationButton,
+                isGettingLocation && styles.buttonDisabled,
+              ]}
+              onPress={getCurrentLocation}
+              disabled={isGettingLocation}
+            >
+              {isGettingLocation ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.validateLocationText}>
+                  Get Current Location
+                </Text>
+              )}
+            </TouchableOpacity>
+            <View style={styles.coordinatesContainer}>
+              <Text style={styles.coordinatesLabel}>Coordinates</Text>
+              <Text style={[styles.coordinatesValue, !currentLocation && styles.coordinatesUnset]}>
+                {currentLocation
+                  ? `${currentLocation.latitude.toFixed(6)}, ${currentLocation.longitude.toFixed(6)}`
+                  : "—"}
+              </Text>
             </View>
-          ) : (
-            <View style={styles.map}>
-              <LeafletView
-                source={{ html: webViewContent }}
-                mapCenterPosition={{
-                  lat: currentLocation.latitude,
-                  lng: currentLocation.longitude,
-                }}
-                zoom={15}
-                mapMarkers={[
-                  {
-                    id: '1',
-                    position: {
-                      lat: currentLocation.latitude,
-                      lng: currentLocation.longitude,
+          </View>
+
+          {/* Tree Information Section */}
+          <View style={styles.treeInfoSection}>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Tree specie:</Text>
+              <Text style={styles.infoValue}>
+                {taskData.speciesName || selectedSpecies || "N/A"}
+              </Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Tree ID:</Text>
+              <Text style={styles.infoValue}>
+                {taskData.treeCode || taskData.treeId || "N/A"}
+              </Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Custodian Name:</Text>
+              <Text style={styles.infoValue}>
+                {taskData.custodianName || "N/A"}
+              </Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Phone No:</Text>
+              <Text style={styles.infoValue}>
+                {taskData.custodianPhone || "N/A"}
+              </Text>
+            </View>
+          </View>
+
+          {/* Tree Species Selection */}
+          <View style={styles.formSection}>
+            <View style={styles.formHeader}>
+              <Text style={styles.formLabel}>Tree Species</Text>
+              <TouchableOpacity
+                style={styles.viewSpecieButton}
+                onPress={() =>
+                  router.push({
+                    pathname: "/treelist",
+                    params: {
+                      taskId: taskData.taskId,
+                      treeId: taskData.treeId,
+                      treeCode: taskData.treeCode,
+                      speciesName: taskData.speciesName || selectedSpecies,
+                      speciesId: taskData.speciesId,
+                      custodianName: taskData.custodianName,
+                      custodianPhone: taskData.custodianPhone,
+                      custodianId: taskData.custodianId || "",
+                      ...(currentLocation && {
+                        locationLat: currentLocation.latitude.toString(),
+                        locationLng: currentLocation.longitude.toString(),
+                      }),
                     },
-                    icon: '📍',
-                    size: [40, 40],
+                  })
+                }
+              >
+                <Text style={styles.viewSpecieText}>View Specie</Text>
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity
+              style={styles.dropdown}
+              onPress={() =>
+                router.push({
+                  pathname: "/treespecie",
+                  params: {
+                    returnPath: "/validate",
+                    taskId: taskData.taskId,
+                    treeId: taskData.treeId,
+                    treeCode: taskData.treeCode,
+                    speciesName: taskData.speciesName || selectedSpecies,
+                    speciesId: taskData.speciesId,
+                    custodianName: taskData.custodianName,
+                    custodianPhone: taskData.custodianPhone,
+                    custodianId: taskData.custodianId || "",
+                    specieId: taskData.speciesId || undefined,
+                    ...(currentLocation && {
+                      locationLat: currentLocation.latitude.toString(),
+                      locationLng: currentLocation.longitude.toString(),
+                    }),
                   },
-                ]}
-                zoomControl={true}
-                attributionControl={true}
-                doDebug={false}
-                key={`${currentLocation.latitude}-${currentLocation.longitude}`}
-              />
+                })
+              }
+            >
+              <Text style={styles.dropdownText}>{selectedSpecies}</Text>
+              <Ionicons name="chevron-down" size={20} color="#666" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Accessibility */}
+          <View style={styles.formSection}>
+            <Text style={styles.formLabel}>Accessibility</Text>
+            <View style={styles.radioGroup}>
+              <TouchableOpacity
+                style={styles.radioOption}
+                onPress={() => setAccessibility("yes")}
+              >
+                <View style={styles.radioButton}>
+                  {accessibility === "yes" && (
+                    <View style={styles.radioButtonSelected} />
+                  )}
+                </View>
+                <Text style={styles.radioLabel}>Yes</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.radioOption}
+                onPress={() => setAccessibility("no")}
+              >
+                <View style={styles.radioButton}>
+                  {accessibility === "no" && (
+                    <View style={styles.radioButtonSelected} />
+                  )}
+                </View>
+                <Text style={styles.radioLabel}>No</Text>
+              </TouchableOpacity>
             </View>
-          )}
-        </View>
-
-        {/* Validate Location Button and Coordinates */}
-        <View style={styles.locationSection}>
-          <TouchableOpacity
-            style={[styles.validateLocationButton, isGettingLocation && styles.buttonDisabled]}
-            onPress={getCurrentLocation}
-            disabled={isGettingLocation}>
-            {isGettingLocation ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <Text style={styles.validateLocationText}>Validate Actual Location</Text>
-            )}
-          </TouchableOpacity>
-          <View style={styles.coordinatesContainer}>
-            <Text style={styles.coordinatesLabel}>Cordinates</Text>
-            <Text style={styles.coordinatesValue}>
-              {currentLocation.latitude.toFixed(6)}, {currentLocation.longitude.toFixed(6)}
-            </Text>
-          </View>
-        </View>
-
-        {/* Tree Information Section */}
-        <View style={styles.treeInfoSection}>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Tree specie:</Text>
-            <Text style={styles.infoValue}>{taskData.speciesName || selectedSpecies || 'N/A'}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Tree ID:</Text>
-            <Text style={styles.infoValue}>{taskData.treeCode || 'N/A'}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Custodian Name:</Text>
-            <Text style={styles.infoValue}>{taskData.custodianName || 'N/A'}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Phone No:</Text>
-            <Text style={styles.infoValue}>{taskData.custodianPhone || 'N/A'}</Text>
-          </View>
-        </View>
-
-        {/* Tree Species Selection */}
-        <View style={styles.formSection}>
-          <View style={styles.formHeader}>
-            <Text style={styles.formLabel}>Tree Species</Text>
-            <TouchableOpacity
-              style={styles.viewSpecieButton}
-              onPress={() => router.push({
-                pathname: '/treelist',
-                params: {
-                  // Pass current task data so it can be preserved when navigating back
-                  taskId: taskData.taskId,
-                  treeId: taskData.treeId,
-                  treeCode: taskData.treeCode,
-                  speciesName: taskData.speciesName || selectedSpecies,
-                  speciesId: taskData.speciesId,
-                  custodianName: taskData.custodianName,
-                  custodianPhone: taskData.custodianPhone,
-                  custodianId: taskData.custodianId || '',
-                },
-              })}>
-              <Text style={styles.viewSpecieText}>View Specie</Text>
-            </TouchableOpacity>
-          </View>
-          <TouchableOpacity
-            style={styles.dropdown}
-            onPress={() => setShowSpeciesDropdown(!showSpeciesDropdown)}>
-            <Text style={styles.dropdownText}>{selectedSpecies}</Text>
-            <Ionicons name="chevron-down" size={20} color="#666" />
-          </TouchableOpacity>
-        </View>
-
-        {/* Accessibility */}
-        <View style={styles.formSection}>
-          <Text style={styles.formLabel}>Accessibility</Text>
-          <View style={styles.radioGroup}>
-            <TouchableOpacity
-              style={styles.radioOption}
-              onPress={() => setAccessibility('yes')}>
-              <View style={styles.radioButton}>
-                {accessibility === 'yes' && <View style={styles.radioButtonSelected} />}
+            {accessibility === "no" && (
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Comment (Required)</Text>
+                <TextInput
+                  style={styles.commentInput}
+                  placeholder="Please provide a reason why the tree is not accessible"
+                  placeholderTextColor="#999"
+                  value={accessibilityReason}
+                  onChangeText={setAccessibilityReason}
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
+                />
               </View>
-              <Text style={styles.radioLabel}>Yes</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.radioOption}
-              onPress={() => setAccessibility('no')}>
-              <View style={styles.radioButton}>
-                {accessibility === 'no' && <View style={styles.radioButtonSelected} />}
-              </View>
-              <Text style={styles.radioLabel}>No</Text>
-            </TouchableOpacity>
-          </View>
-          {accessibility === 'no' && (
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Comment (Required)</Text>
-              <TextInput
-                style={styles.commentInput}
-                placeholder="Please provide a reason why the tree is not accessible"
-                placeholderTextColor="#999"
-                value={accessibilityReason}
-                onChangeText={setAccessibilityReason}
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-              />
-            </View>
-          )}
-        </View>
-
-        {/* Initial Picture */}
-        <View style={styles.formSection}>
-          <Text style={styles.formLabel}>Initial Picture</Text>
-          <View style={styles.pictureContainer}>
-            {treeImage ? (
-              <>
-                <Image source={{ uri: treeImage }} style={styles.capturedImage} />
-                <TouchableOpacity
-                  style={[styles.captureButton, styles.retakeButton]}
-                  onPress={captureTreePhoto}>
-                  <Text style={styles.captureButtonText}>Retake Photo</Text>
-                </TouchableOpacity>
-              </>
-            ) : (
-              <>
-                <Text style={styles.picturePlaceholder}>Capture Tree Photo</Text>
-                <TouchableOpacity style={styles.captureButton} onPress={captureTreePhoto}>
-                  <Text style={styles.captureButtonText}>Capture</Text>
-                </TouchableOpacity>
-              </>
             )}
           </View>
-        </View>
-      </ScrollView>
 
-      {/* Submit Task Button */}
+          {/* Initial Picture */}
+          <View style={styles.formSection}>
+            <Text style={styles.formLabel}>Initial Picture</Text>
+            <View style={styles.pictureContainer}>
+              {treeImage ? (
+                <>
+                  <Image
+                    source={{ uri: treeImage }}
+                    style={styles.capturedImage}
+                  />
+                  <TouchableOpacity
+                    style={[styles.captureButton, styles.retakeButton]}
+                    onPress={captureTreePhoto}
+                  >
+                    <Text style={styles.captureButtonText}>Retake Photo</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.picturePlaceholder}>
+                    Capture Tree Photo
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.captureButton}
+                    onPress={captureTreePhoto}
+                  >
+                    <Text style={styles.captureButtonText}>Capture</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+          </View>
+        </ScrollView>
+
+        {/* Submit Task Button */}
       </KeyboardAvoidingView>
       <View style={styles.submitContainer}>
         <TouchableOpacity
-          style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
+          style={[
+            styles.submitButton,
+            isSubmitting && styles.submitButtonDisabled,
+          ]}
           onPress={handleSubmit}
-          disabled={isSubmitting}>
+          disabled={isSubmitting}
+        >
           {isSubmitting ? (
             <>
-              <ActivityIndicator size="small" color="#FFFFFF" style={styles.submitSpinner} />
+              <ActivityIndicator
+                size="small"
+                color="#FFFFFF"
+                style={styles.submitSpinner}
+              />
               <Text style={styles.submitButtonText}>Submitting...</Text>
             </>
           ) : (
@@ -722,36 +872,36 @@ export default function ValidateTreeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: "#F5F5F5",
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: 20,
     paddingVertical: 20,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: "#F5F5F5",
   },
   headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     flex: 1,
     marginRight: 12,
   },
   backButton: {
     marginRight: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 100,
     padding: 8,
   },
   headerTitle: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#000',
+    fontWeight: "600",
+    color: "#000",
   },
   headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 16,
   },
   iconButton: {
@@ -759,8 +909,8 @@ const styles = StyleSheet.create({
   },
   signOutText: {
     fontSize: 12,
-    color: '#000',
-    fontWeight: '500',
+    color: "#000",
+    fontWeight: "500",
   },
   scrollView: {
     flex: 1,
@@ -778,148 +928,152 @@ const styles = StyleSheet.create({
   },
   treeIdText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#000',
+    fontWeight: "600",
+    color: "#000",
   },
   mapContainer: {
     borderRadius: 12,
-    overflow: 'hidden',
+    overflow: "hidden",
     marginBottom: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: '#6B7280',
+    borderColor: "#6B7280",
   },
   map: {
-    width: '100%',
+    width: "100%",
     height: 280,
   },
   loadingContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#E0E0E0',
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#E0E0E0",
   },
   loadingText: {
-    color: '#666',
+    color: "#666",
     fontSize: 14,
   },
   locationSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 20,
     gap: 12,
   },
   validateLocationButton: {
-    backgroundColor: '#4A4A4A',
+    backgroundColor: "#4A4A4A",
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 12,
     flex: 1,
     minHeight: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   buttonDisabled: {
     opacity: 0.7,
   },
   validateLocationText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 12,
-    fontWeight: '500',
-    textAlign: 'center',
+    fontWeight: "500",
+    textAlign: "center",
   },
   coordinatesContainer: {
     flex: 1,
-    alignItems: 'flex-end',
+    alignItems: "flex-end",
   },
   coordinatesLabel: {
     fontSize: 12,
-    color: '#000',
-    fontWeight: '500',
+    color: "#000",
+    fontWeight: "500",
     marginBottom: 4,
   },
   coordinatesValue: {
     fontSize: 11,
-    color: '#666',
+    color: "#666",
+  },
+  coordinatesUnset: {
+    color: "#999",
+    fontStyle: "italic",
   },
   treeInfoSection: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 8,
     padding: 16,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: "#E0E0E0",
     gap: 12,
   },
   infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingVertical: 4,
   },
   infoLabel: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#666',
+    fontWeight: "600",
+    color: "#666",
     flex: 1,
   },
   infoValue: {
     fontSize: 12,
-    color: '#000',
-    fontWeight: '500',
+    color: "#000",
+    fontWeight: "500",
     flex: 1,
-    textAlign: 'right',
+    textAlign: "right",
   },
   formSection: {
     marginBottom: 20,
   },
   formHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 8,
   },
   formLabel: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#000',
+    fontWeight: "600",
+    color: "#000",
     marginBottom: 8,
   },
   viewSpecieButton: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 8,
     paddingHorizontal: 15,
     paddingVertical: 6,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: "#E0E0E0",
   },
   viewSpecieText: {
     fontSize: 11,
-    color: '#36454F',
-    fontWeight: '500',
+    color: "#36454F",
+    fontWeight: "500",
   },
   dropdown: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: "#E0E0E0",
   },
   dropdownText: {
     fontSize: 14,
-    color: '#000',
+    color: "#000",
   },
   radioGroup: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 24,
     marginTop: 8,
   },
   radioOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   radioButton: {
@@ -927,36 +1081,36 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 10,
     borderWidth: 2,
-    borderColor: '#2E8B57',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: "#2E8B57",
+    alignItems: "center",
+    justifyContent: "center",
   },
   radioButtonSelected: {
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#2E8B57',
+    backgroundColor: "#2E8B57",
   },
   radioLabel: {
     fontSize: 14,
-    color: '#000',
+    color: "#000",
   },
   pictureContainer: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 8,
     padding: 20,
-    alignItems: 'center',
+    alignItems: "center",
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: "#E0E0E0",
     marginTop: 8,
   },
   picturePlaceholder: {
     fontSize: 14,
-    color: '#666',
+    color: "#666",
     marginBottom: 12,
   },
   captureButton: {
-    backgroundColor: '#2E8B57',
+    backgroundColor: "#2E8B57",
     borderRadius: 8,
     paddingHorizontal: 24,
     paddingVertical: 10,
@@ -965,31 +1119,31 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   captureButtonText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   capturedImage: {
-    width: '100%',
+    width: "100%",
     height: 200,
     borderRadius: 8,
     marginBottom: 12,
-    resizeMode: 'cover',
+    resizeMode: "cover",
   },
   submitContainer: {
     paddingHorizontal: 20,
     paddingVertical: 16,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: "#F5F5F5",
     borderTopWidth: 1,
-    borderTopColor: '#E0E0E0',
+    borderTopColor: "#E0E0E0",
   },
   submitButton: {
-    backgroundColor: '#2E8B57',
+    backgroundColor: "#2E8B57",
     borderRadius: 12,
     paddingVertical: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
     gap: 8,
   },
   submitButtonDisabled: {
@@ -999,41 +1153,41 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   submitButtonText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   inputContainer: {
     marginTop: 12,
   },
   inputLabel: {
     fontSize: 14,
-    fontWeight: '500',
-    color: '#666',
+    fontWeight: "500",
+    color: "#666",
     marginBottom: 8,
   },
   inputField: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 14,
-    color: '#000',
+    color: "#000",
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: "#E0E0E0",
     minHeight: 80,
-    textAlignVertical: 'top',
+    textAlignVertical: "top",
   },
   commentInput: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 14,
-    color: '#000',
+    color: "#000",
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: "#E0E0E0",
     minHeight: 100,
-    textAlignVertical: 'top',
+    textAlignVertical: "top",
   },
 });

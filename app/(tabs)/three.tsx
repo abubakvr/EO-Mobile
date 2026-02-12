@@ -487,7 +487,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 20,
-    paddingBottom: 120,
+    paddingBottom: 180, // Space for bottom tab bar so pagination is not covered on Android
   },
   reportCard: {
     borderRadius: 12,

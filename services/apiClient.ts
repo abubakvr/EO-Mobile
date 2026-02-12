@@ -228,13 +228,13 @@ class ApiClient {
             new ApiError(errorMessage, statusCode, errorData)
           );
         } else if (error.request) {
-          // Request made but no response received
+          // Request made but no response received (e.g. device offline, network error)
           let errorMessage = 'Network error. Please check your connection.';
-          
-          // Check for specific network error types
           const requestError = error.request?._response || error.message || '';
+          const code = (error as any)?.code;
+
           if (typeof requestError === 'string') {
-            if (requestError.includes('timeout') || error.code === 'ECONNABORTED') {
+            if (requestError.includes('timeout') || code === 'ECONNABORTED') {
               errorMessage = 'Request timed out. The server may be slow or unavailable. Please try again.';
             } else if (requestError.includes('Unable to resolve host') || requestError.includes('No address associated with hostname')) {
               errorMessage = `Unable to connect to server (${API_BASE_URL}). Please check:\n\n1. Your internet connection\n2. The API server is accessible\n3. DNS settings`;
@@ -242,15 +242,10 @@ class ApiClient {
               errorMessage = 'Network request failed. Please check your internet connection.';
             }
           }
-          
+
+          // Log as warn (not error) so offline/network failures don't spam console
           if (__DEV__) {
-            console.error('[API Error] No response received', {
-              url: error.config?.url,
-              baseURL: error.config?.baseURL || API_BASE_URL,
-              method: error.config?.method,
-              error: requestError,
-              code: error.code,
-            });
+            console.warn('[API] No response received (device may be offline):', error.config?.method, error.config?.url);
           }
 
           return Promise.reject(

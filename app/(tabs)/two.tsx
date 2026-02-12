@@ -117,14 +117,28 @@ export default function ScheduleScreen() {
           <View style={styles.errorContainer}>
             <Ionicons name="alert-circle-outline" size={48} color="#FF3B30" />
             <Text style={styles.errorText}>Failed to load tasks</Text>
+            <Text style={styles.errorSubtext}>
+              {!isOnline ? 'Device is offline. Connect to the internet and retry.' : (error as Error)?.message || 'Please try again.'}
+            </Text>
             <TouchableOpacity style={styles.retryButton} onPress={() => refetch()}>
               <Text style={styles.retryButtonText}>Retry</Text>
             </TouchableOpacity>
           </View>
         ) : tasks.length === 0 && !isLoading ? (
           <View style={styles.emptyContainer}>
-            <Ionicons name="checkmark-circle-outline" size={48} color="#999" />
-            <Text style={styles.emptyText}>No tasks available</Text>
+            <Ionicons
+              name={!isOnline ? 'cloud-offline-outline' : 'checkmark-circle-outline'}
+              size={48}
+              color="#999"
+            />
+            <Text style={styles.emptyText}>
+              {!isOnline
+                ? 'Device is offline. No tasks available offline.'
+                : 'No tasks available'}
+            </Text>
+            {!isOnline && (
+              <Text style={styles.emptySubtext}>Connect to the internet to load tasks.</Text>
+            )}
           </View>
         ) : (
           <>
@@ -363,7 +377,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 20,
-    paddingBottom: 120, // Space for bottom navigation
+    paddingBottom: 180, // Space for bottom tab bar so pagination is not covered on Android
   },
   taskCard: {
     backgroundColor: '#FFFFFF', // Light green-grey
@@ -468,7 +482,14 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 14,
     color: '#FF3B30',
+    marginBottom: 8,
+  },
+  errorSubtext: {
+    fontSize: 13,
+    color: '#666',
+    textAlign: 'center',
     marginBottom: 16,
+    paddingHorizontal: 24,
   },
   retryButton: {
     backgroundColor: '#2E8B57',
@@ -491,6 +512,14 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 14,
     color: '#999',
+    textAlign: 'center',
+  },
+  emptySubtext: {
+    marginTop: 8,
+    fontSize: 13,
+    color: '#999',
+    textAlign: 'center',
+    paddingHorizontal: 32,
   },
   paginationContainer: {
     flexDirection: 'row',

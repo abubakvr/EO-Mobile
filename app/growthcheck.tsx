@@ -1,6 +1,7 @@
 import SuccessScreen from '@/components/SuccessScreen';
 import { reportService } from '@/services/reportService';
 import { SubmissionData, submitWithOfflineSupport } from '@/services/submitWithOfflineSupport';
+import { compressImageToMaxSize } from '@/utils/imageCompression';
 import { modifyLeafletHtmlForOffline } from '@/utils/mapHtmlModifier';
 import { Ionicons } from '@expo/vector-icons';
 import { Asset } from 'expo-asset';
@@ -43,7 +44,7 @@ export default function GrowthCheckScreen() {
   const [viewMode, setViewMode] = useState<ViewMode>('growthCheck');
   const [currentStep, setCurrentStep] = useState<Step>(1);
   const [webViewContent, setWebViewContent] = useState<string | null>(null);
-  const [currentLocation, setCurrentLocation] = useState(DEFAULT_MAP_LOCATION);
+  const [currentLocation, setCurrentLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [locationAccuracy, setLocationAccuracy] = useState<string>('');
   const [locationObject, setLocationObject] = useState<Location.LocationObject | null>(null);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
@@ -92,6 +93,21 @@ export default function GrowthCheckScreen() {
       custodianId: newCustodianId || prev.custodianId,
     }));
   }, [params.treeCode, params.speciesName, params.speciesId, params.custodianName, params.custodianPhone, params.taskId, params.treeId, params.custodianId]);
+
+  // Restore location when returning from species picker (so selecting a specie doesn't reset location)
+  useEffect(() => {
+    const lat = getStringParam(params.locationLat);
+    const lng = getStringParam(params.locationLng);
+    if (lat && lng) {
+      const latNum = parseFloat(lat);
+      const lngNum = parseFloat(lng);
+      if (!Number.isNaN(latNum) && !Number.isNaN(lngNum)) {
+        setCurrentLocation({ latitude: latNum, longitude: lngNum });
+      }
+    }
+  }, [params.locationLat, params.locationLng]);
+
+  const mapCenter = currentLocation ?? DEFAULT_MAP_LOCATION;
 
   // Form state
   const [soilData, setSoilData] = useState({
@@ -361,6 +377,11 @@ export default function GrowthCheckScreen() {
         return;
       }
 
+      if (!currentLocation) {
+        Alert.alert('Error', 'Please set your current location before submitting.');
+        return;
+      }
+
       setIsSubmitting(true);
 
       // Build location metadata
@@ -519,6 +540,11 @@ export default function GrowthCheckScreen() {
         return;
       }
 
+      if (!currentLocation) {
+        Alert.alert('Error', 'Please set your current location before submitting.');
+        return;
+      }
+
       setIsSubmitting(true);
 
       // Prepare image file data
@@ -650,15 +676,20 @@ export default function GrowthCheckScreen() {
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        const imageUri = result.assets[0].uri;
+        let uri = result.assets[0].uri;
+        try {
+          uri = await compressImageToMaxSize(uri);
+        } catch (e) {
+          if (__DEV__) console.warn('Image compression failed, using original:', e);
+        }
         if (type === 'leaf') {
-          setLeafImage(imageUri);
+          setLeafImage(uri);
         } else if (type === 'stem') {
-          setStemImage(imageUri);
+          setStemImage(uri);
         } else if (type === 'tree') {
-          setTreeImage(imageUri);
+          setTreeImage(uri);
         } else if (type === 'incident') {
-          setIncidentPhoto(imageUri);
+          setIncidentPhoto(uri);
         }
       }
     } catch (error) {
@@ -1144,25 +1175,29 @@ export default function GrowthCheckScreen() {
               <LeafletView
                 source={{ html: webViewContent }}
                 mapCenterPosition={{
-                  lat: currentLocation.latitude,
-                  lng: currentLocation.longitude,
+                  lat: mapCenter.latitude,
+                  lng: mapCenter.longitude,
                 }}
                 zoom={15}
-                mapMarkers={[
-                  {
-                    id: '1',
-                    position: {
-                      lat: currentLocation.latitude,
-                      lng: currentLocation.longitude,
-                    },
-                    icon: '📍',
-                    size: [40, 40],
-                  },
-                ]}
+                mapMarkers={
+                  currentLocation
+                    ? [
+                        {
+                          id: '1',
+                          position: {
+                            lat: currentLocation.latitude,
+                            lng: currentLocation.longitude,
+                          },
+                          icon: '📍',
+                          size: [40, 40],
+                        },
+                      ]
+                    : []
+                }
                 zoomControl={true}
                 attributionControl={true}
                 doDebug={false}
-                key={`${currentLocation.latitude}-${currentLocation.longitude}`}
+                key={currentLocation ? `${currentLocation.latitude}-${currentLocation.longitude}` : 'unset'}
               />
             </View>
           )}
@@ -1182,8 +1217,10 @@ export default function GrowthCheckScreen() {
           </TouchableOpacity>
           <View style={styles.coordinatesContainer}>
             <Text style={styles.coordinatesLabel}>Coordinates</Text>
-            <Text style={styles.coordinatesValue}>
-              {currentLocation.latitude.toFixed(6)}, {currentLocation.longitude.toFixed(6)}
+            <Text style={[styles.coordinatesValue, !currentLocation && styles.coordinatesUnset]}>
+              {currentLocation
+                ? `${currentLocation.latitude.toFixed(6)}, ${currentLocation.longitude.toFixed(6)}`
+                : '—'}
             </Text>
           </View>
         </View>
@@ -1194,8 +1231,10 @@ export default function GrowthCheckScreen() {
             <View style={styles.locationLeft}>
               {/* <Ionicons name="locate" size={24} color="#000" /> */}
               <View style={styles.locationCoordinatesContainer}>
-                <Text style={styles.locationCoordinatesValue}>
-                  {currentLocation.latitude.toFixed(6)}, {currentLocation.longitude.toFixed(6)}
+                <Text style={[styles.locationCoordinatesValue, !currentLocation && styles.coordinatesUnset]}>
+                  {currentLocation
+                    ? `${currentLocation.latitude.toFixed(6)}, ${currentLocation.longitude.toFixed(6)}`
+                    : '—'}
                 </Text>
                 <Text style={styles.precisionText}>
                   {locationObject?.coords?.accuracy !== null && locationObject?.coords?.accuracy !== undefined
@@ -1467,6 +1506,10 @@ const styles = StyleSheet.create({
   coordinatesValue: {
     fontSize: 11,
     color: '#666',
+  },
+  coordinatesUnset: {
+    color: '#999',
+    fontStyle: 'italic',
   },
   locationCard: {
     backgroundColor: '#FFFFFF',

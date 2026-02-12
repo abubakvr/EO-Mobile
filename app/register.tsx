@@ -1,6 +1,7 @@
 import SuccessScreen from '@/components/SuccessScreen';
 import { reportService } from '@/services/reportService';
 import { SubmissionData, submitWithOfflineSupport } from '@/services/submitWithOfflineSupport';
+import { compressImageToMaxSize } from '@/utils/imageCompression';
 import { modifyLeafletHtmlForOffline } from '@/utils/mapHtmlModifier';
 import { Ionicons } from '@expo/vector-icons';
 import { Asset } from 'expo-asset';
@@ -38,8 +39,7 @@ export default function RegisterTreeScreen() {
   const { logout } = useAuth();
   const [webViewContent, setWebViewContent] = useState<string | null>(null);
   const [selectedSpecies, setSelectedSpecies] = useState('Mango');
-  const [showSpeciesDropdown, setShowSpeciesDropdown] = useState(false);
-  const [currentLocation, setCurrentLocation] = useState(DEFAULT_MAP_LOCATION);
+  const [currentLocation, setCurrentLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [locationAccuracy, setLocationAccuracy] = useState<string>('');
   const [locationObject, setLocationObject] = useState<Location.LocationObject | null>(null);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
@@ -78,6 +78,21 @@ export default function RegisterTreeScreen() {
       setCustodianPhone(custPhone);
     }
   }, [params.selectedSpecie, params.speciesId, params.custodianName, params.custodianPhone]);
+
+  // Restore location when returning from species picker (so selecting a specie doesn't reset location)
+  useEffect(() => {
+    const lat = getStringParam(params.locationLat);
+    const lng = getStringParam(params.locationLng);
+    if (lat && lng) {
+      const latNum = parseFloat(lat);
+      const lngNum = parseFloat(lng);
+      if (!Number.isNaN(latNum) && !Number.isNaN(lngNum)) {
+        setCurrentLocation({ latitude: latNum, longitude: lngNum });
+      }
+    }
+  }, [params.locationLat, params.locationLng]);
+
+  const mapCenter = currentLocation ?? DEFAULT_MAP_LOCATION;
 
   useEffect(() => {
     let isMounted = true;
@@ -261,7 +276,13 @@ export default function RegisterTreeScreen() {
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        setTreeImage(result.assets[0].uri);
+        try {
+          const uri = await compressImageToMaxSize(result.assets[0].uri);
+          setTreeImage(uri);
+        } catch (e) {
+          if (__DEV__) console.warn('Image compression failed, using original:', e);
+          setTreeImage(result.assets[0].uri);
+        }
       }
     } catch (error) {
       console.error('Error capturing photo:', error);
@@ -294,6 +315,11 @@ export default function RegisterTreeScreen() {
 
       if (accessibility === 'no' && !accessibilityReason.trim()) {
         Alert.alert('Error', 'Please provide a comment explaining why the tree is not accessible.');
+        return;
+      }
+
+      if (!currentLocation) {
+        Alert.alert('Error', 'Please set your current location before submitting.');
         return;
       }
 
@@ -456,25 +482,29 @@ export default function RegisterTreeScreen() {
                 <LeafletView
                   source={{ html: webViewContent }}
                   mapCenterPosition={{
-                    lat: currentLocation.latitude,
-                    lng: currentLocation.longitude,
+                    lat: mapCenter.latitude,
+                    lng: mapCenter.longitude,
                   }}
                   zoom={15}
-                  mapMarkers={[
-                    {
-                      id: '1',
-                      position: {
-                        lat: currentLocation.latitude,
-                        lng: currentLocation.longitude,
-                      },
-                      icon: '📍',
-                      size: [40, 40],
-                    },
-                  ]}
+                  mapMarkers={
+                    currentLocation
+                      ? [
+                          {
+                            id: '1',
+                            position: {
+                              lat: currentLocation.latitude,
+                              lng: currentLocation.longitude,
+                            },
+                            icon: '📍',
+                            size: [40, 40],
+                          },
+                        ]
+                      : []
+                  }
                   zoomControl={true}
                   attributionControl={true}
                   doDebug={false}
-                  key={`${currentLocation.latitude}-${currentLocation.longitude}`}
+                  key={currentLocation ? `${currentLocation.latitude}-${currentLocation.longitude}` : 'unset'}
                 />
               </View>
             )}
@@ -494,8 +524,10 @@ export default function RegisterTreeScreen() {
             </TouchableOpacity>
             <View style={styles.coordinatesContainer}>
               <Text style={styles.coordinatesLabel}>Coordinates</Text>
-              <Text style={styles.coordinatesValue}>
-                {currentLocation.latitude.toFixed(6)}, {currentLocation.longitude.toFixed(6)}
+              <Text style={[styles.coordinatesValue, !currentLocation && styles.coordinatesUnset]}>
+                {currentLocation
+                  ? `${currentLocation.latitude.toFixed(6)}, ${currentLocation.longitude.toFixed(6)}`
+                  : '—'}
               </Text>
             </View>
           </View>
@@ -537,6 +569,10 @@ export default function RegisterTreeScreen() {
                     custodianName: custodianName,
                     custodianPhone: custodianPhone,
                     returnPath: '/register',
+                    ...(currentLocation && {
+                      locationLat: currentLocation.latitude.toString(),
+                      locationLng: currentLocation.longitude.toString(),
+                    }),
                   },
                 })}>
                 <Text style={styles.viewSpecieText}>View Specie</Text>
@@ -544,7 +580,21 @@ export default function RegisterTreeScreen() {
             </View>
             <TouchableOpacity
               style={styles.dropdown}
-              onPress={() => setShowSpeciesDropdown(!showSpeciesDropdown)}>
+              onPress={() => router.push({
+                pathname: '/treespecie',
+                params: {
+                  returnPath: '/register',
+                  speciesName: selectedSpecies,
+                  speciesId: speciesId,
+                  custodianName: custodianName,
+                  custodianPhone: custodianPhone,
+                  specieId: speciesId || undefined,
+                  ...(currentLocation && {
+                    locationLat: currentLocation.latitude.toString(),
+                    locationLng: currentLocation.longitude.toString(),
+                  }),
+                },
+              })}>
               <Text style={styles.dropdownText}>{selectedSpecies}</Text>
               <Ionicons name="chevron-down" size={20} color="#666" />
             </TouchableOpacity>
@@ -746,6 +796,10 @@ const styles = StyleSheet.create({
   coordinatesValue: {
     fontSize: 11,
     color: '#666',
+  },
+  coordinatesUnset: {
+    color: '#999',
+    fontStyle: 'italic',
   },
   formSection: {
     marginBottom: 20,

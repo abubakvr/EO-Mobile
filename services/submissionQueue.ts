@@ -15,6 +15,8 @@ export interface QueuedSubmission {
   formData: any; // Store FormData as serializable object
   timestamp: string;
   retryCount: number;
+  /** Last error message from sync attempt (e.g. "Tree already validated") */
+  lastSyncError?: string;
 }
 
 export const submissionQueue = {
@@ -87,6 +89,21 @@ export const submissionQueue = {
       await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(updated));
     } catch (error) {
       console.error('[SubmissionQueue] Error updating retry count:', error);
+    }
+  },
+
+  /**
+   * Store or clear the last sync error for a submission (shown on offline reports card)
+   */
+  async updateSubmissionError(submissionId: string, error: string | null): Promise<void> {
+    try {
+      const queue = await this.getQueue();
+      const updated = queue.map((item) =>
+        item.id === submissionId ? { ...item, lastSyncError: error ?? undefined } : item
+      );
+      await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(updated));
+    } catch (e) {
+      console.error('[SubmissionQueue] Error updating submission error:', e);
     }
   },
 
